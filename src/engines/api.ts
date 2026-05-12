@@ -10,6 +10,7 @@ import type {
   SearchResults,
   SearchType,
   Device,
+  CiderConfig,
 } from "../lib/types";
 import { getMediaUserToken, loadConfig } from "../lib/config";
 import { buildIdentity, parseEntityRef, validateRawId } from "../lib/entities";
@@ -184,6 +185,14 @@ interface AMResponse {
   data?: AMResource[];
 }
 
+type ApiRequest = <T>(path: string, params?: Record<string, string>) => Promise<T>;
+type ConfigLoader = () => Promise<CiderConfig>;
+
+interface ApiEngineDeps {
+  request?: ApiRequest;
+  configLoader?: ConfigLoader;
+}
+
 // ── Safe field extraction from untyped API responses ──
 
 function str(val: unknown, fallback = ""): string {
@@ -308,23 +317,28 @@ export class ApiEngine implements MusicEngine {
     repeat: false,
   };
 
+  constructor(private deps: ApiEngineDeps = {}) {}
+
+  private request<T>(path: string, params?: Record<string, string>): Promise<T> {
+    return (this.deps.request ?? apiRequest)<T>(path, params);
+  }
+
+  private loadRuntimeConfig(): Promise<CiderConfig> {
+    return (this.deps.configLoader ?? loadConfig)();
+  }
+
   private async getStorefront(): Promise<string> {
     if (cachedStorefront) return cachedStorefront;
-    const config = await loadConfig();
+    const config = await this.loadRuntimeConfig();
     if (config.storefront && config.storefront !== "auto") {
       cachedStorefront = config.storefront;
       return cachedStorefront;
     }
 
-    try {
-      const data = await apiRequest<AMResponse>("/me/storefront");
-      const storefront = data.data?.[0]?.id;
-      cachedStorefront = storefront || "us";
-      return cachedStorefront;
-    } catch {
-      cachedStorefront = "us";
-      return cachedStorefront;
-    }
+    const data = await this.request<AMResponse>("/me/storefront");
+    const storefront = data.data?.[0]?.id;
+    cachedStorefront = storefront || "us";
+    return cachedStorefront;
   }
 
   // ── Playback (not supported via API — delegate to native) ──
@@ -398,7 +412,7 @@ export class ApiEngine implements MusicEngine {
       .join(",");
 
     const storefront = await this.getStorefront();
-    const data = await apiRequest<AMResponse>(`/catalog/${storefront}/search`, {
+    const data = await this.request<AMResponse>(`/catalog/${storefront}/search`, {
       term: query,
       types: amTypes,
       limit: String(limit),
@@ -431,7 +445,7 @@ export class ApiEngine implements MusicEngine {
   // ── Library ──
 
   async getPlaylists(): Promise<Playlist[]> {
-    const data = await apiRequest<AMResponse>("/me/library/playlists", {
+    const data = await this.request<AMResponse>("/me/library/playlists", {
       limit: "100",
     });
     return (data.data || []).map(parseApiPlaylist);
@@ -439,7 +453,7 @@ export class ApiEngine implements MusicEngine {
 
   async getPlaylistTracks(playlistId: string): Promise<Track[]> {
     const apiPlaylistId = resolveApiLibraryId(playlistId, "Playlist");
-    const data = await apiRequest<AMResponse>(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}/tracks`, {
+    const data = await this.request<AMResponse>(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}/tracks`, {
       limit: "100",
     });
     return (data.data || []).map(parseApiTrack);
@@ -447,7 +461,7 @@ export class ApiEngine implements MusicEngine {
 
   async getPlaylistInfo(playlistId: string): Promise<PlaylistDetails> {
     const apiPlaylistId = resolveApiLibraryId(playlistId, "Playlist");
-    const data = await apiRequest<AMResponse>(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}`, {});
+    const data = await this.request<AMResponse>(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}`, {});
     const playlist = data.data?.[0];
     if (!playlist) {
       throw new ExternalServiceError(`Apple Music playlist not found: ${apiPlaylistId}`);
@@ -490,7 +504,7 @@ export class ApiEngine implements MusicEngine {
   }
 
   async getLibraryTracks(limit = 50, offset = 0): Promise<Track[]> {
-    const data = await apiRequest<AMResponse>("/me/library/songs", {
+    const data = await this.request<AMResponse>("/me/library/songs", {
       limit: String(limit),
       offset: String(offset),
     });
@@ -498,7 +512,7 @@ export class ApiEngine implements MusicEngine {
   }
 
   async getLibraryAlbums(limit = 50, offset = 0): Promise<Album[]> {
-    const data = await apiRequest<AMResponse>("/me/library/albums", {
+    const data = await this.request<AMResponse>("/me/library/albums", {
       limit: String(limit),
       offset: String(offset),
     });

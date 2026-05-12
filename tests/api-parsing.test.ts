@@ -4,7 +4,7 @@ import { describe, expect, test } from "bun:test";
 // exported helpers they depend on and verify the contract via the entity system.
 import { buildIdentity } from "../src/lib/entities";
 import { ApiEngine } from "../src/engines/api";
-import { UnsupportedOperationError, ValidationError } from "../src/lib/errors";
+import { AuthError, UnsupportedOperationError, ValidationError } from "../src/lib/errors";
 
 describe("API response field extraction contract", () => {
   test("buildIdentity prefers libraryId for API library entities", () => {
@@ -52,5 +52,21 @@ describe("API playlist ID validation", () => {
   test("rejects unsafe raw playlist IDs before making network requests", async () => {
     const engine = new ApiEngine();
     await expect(engine.getPlaylistTracks("abc/../def")).rejects.toBeInstanceOf(ValidationError);
+  });
+});
+
+describe("API storefront discovery", () => {
+  test("propagates auth failures instead of silently falling back to us", async () => {
+    const engine = new ApiEngine({
+      request: async (path: string) => {
+        if (path === "/me/storefront") {
+          throw new AuthError("expired token");
+        }
+        throw new Error(`unexpected request: ${path}`);
+      },
+      configLoader: async () => ({ defaultEngine: "api", storefront: "auto" }),
+    });
+
+    await expect(engine.search("radiohead", ["track"], 1)).rejects.toThrow("expired token");
   });
 });

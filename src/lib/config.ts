@@ -27,7 +27,7 @@ function isMissingFile(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
-function parseConfig(raw: string, path: string): CiderConfig {
+export function parseConfig(raw: string, path: string): CiderConfig {
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);

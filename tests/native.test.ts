@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { deriveAlbumsFromTracks, deriveArtistsFromTracks } from "../src/engines/native";
+import { createMusicApplicationSource, deriveAlbumsFromTracks, deriveArtistsFromTracks, shouldRetryAfterMusicError } from "../src/engines/native";
 import type { Track } from "../src/lib/types";
 
 const tracks: Track[] = [
@@ -50,4 +50,23 @@ describe("native derived entities", () => {
     expect(artists).toHaveLength(1);
     expect(artists[0].id).toBe("native:derived:artist:Radiohead");
   });
+});
+
+describe("native Music.app resolution", () => {
+  test("uses the system Music.app path when it exists", () => {
+    expect(createMusicApplicationSource("/System/Applications/Music.app")).toBe('Application("/System/Applications/Music.app")');
+  });
+
+  test("falls back to the application name when the system path is missing", () => {
+    expect(createMusicApplicationSource("/definitely/not/Music.app")).toBe('Application("Music")');
+  });
+
+  test("retries when path-based Music.app access reports a missing parameter", () => {
+    expect(shouldRetryAfterMusicError("execution error: Error: Error: Parameter is missing. (-1701)")).toBe(true);
+  });
+
+  test("retries when Music.app returns a scripting launch error", () => {
+    expect(shouldRetryAfterMusicError("execution error: An error of type -10827 has occurred. (-10827)")).toBe(true);
+  });
+
 });

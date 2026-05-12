@@ -28,6 +28,14 @@ function formatDuration(seconds: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function tsv(value: unknown): string {
+  return String(value ?? "")
+    .replaceAll("\\", "\\\\")
+    .replaceAll("\t", "\\t")
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r");
+}
+
 // ── JSON output ──
 
 export function outputJson(data: unknown) {
@@ -37,19 +45,19 @@ export function outputJson(data: unknown) {
 // ── Plain output (tab-separated, scriptable) ──
 
 export function outputPlainTrack(t: Track) {
-  console.log(`track\t${t.id}\t${t.name}\t${t.artist}\t${t.album}\t${formatDuration(t.duration)}\t${t.source}`);
+  console.log(`track\t${tsv(t.id)}\t${tsv(t.name)}\t${tsv(t.artist)}\t${tsv(t.album)}\t${formatDuration(t.duration)}\t${tsv(t.source)}`);
 }
 
 export function outputPlainAlbum(a: Album) {
-  console.log(`album\t${a.id}\t${a.name}\t${a.artist}\t${a.trackCount}\t${a.year ?? ""}\t${a.source}`);
+  console.log(`album\t${tsv(a.id)}\t${tsv(a.name)}\t${tsv(a.artist)}\t${a.trackCount}\t${a.year ?? ""}\t${tsv(a.source)}`);
 }
 
 export function outputPlainArtist(a: Artist) {
-  console.log(`artist\t${a.id}\t${a.name}\t${a.genre ?? ""}\t${a.source}`);
+  console.log(`artist\t${tsv(a.id)}\t${tsv(a.name)}\t${tsv(a.genre)}\t${tsv(a.source)}`);
 }
 
 export function outputPlainPlaylist(p: Playlist) {
-  console.log(`playlist\t${p.id}\t${p.name}\t${p.trackCount}\t${p.source}`);
+  console.log(`playlist\t${tsv(p.id)}\t${tsv(p.name)}\t${p.trackCount}\t${tsv(p.source)}`);
 }
 
 export function outputPlainStatus(s: PlaybackState) {
@@ -57,7 +65,7 @@ export function outputPlainStatus(s: PlaybackState) {
     console.log(`stopped\t0\t0\t${s.volume}`);
     return;
   }
-  console.log(`${s.state}\t${s.track.name}\t${s.track.artist}\t${formatDuration(s.position)}/${formatDuration(s.track.duration)}\t${s.volume}`);
+  console.log(`${tsv(s.state)}\t${tsv(s.track.name)}\t${tsv(s.track.artist)}\t${formatDuration(s.position)}/${formatDuration(s.track.duration)}\t${s.volume}`);
 }
 
 // ── Human output (colorized) ──
@@ -160,7 +168,7 @@ export function outputStatus(status: PlaybackState, mode: OutputMode) {
 
 export function outputDevices(devices: Device[], mode: OutputMode) {
   if (mode === "json") return outputJson(devices);
-  if (mode === "plain") return devices.forEach(d => console.log(`device\t${d.id}\t${d.name}\t${d.kind}\t${d.active}`));
+  if (mode === "plain") return devices.forEach(d => console.log(`device\t${tsv(d.id)}\t${tsv(d.name)}\t${tsv(d.kind)}\t${d.active}`));
   if (devices.length === 0) return console.log(c(DIM, "No devices found"));
   devices.forEach((d, i) => outputHumanDevice(d, i));
 }
@@ -200,11 +208,11 @@ export function outputPlaylistDetails(details: PlaylistDetails, mode: OutputMode
   if (mode === "json") return outputJson(details);
 
   if (mode === "plain") {
-    console.log(`playlist\t${details.id}\t${details.name}\t${details.trackCount}\t${details.totalDuration}\t${details.description || ""}`);
-    if (details.artworkPath) console.log(`artwork\t${details.artworkPath}`);
-    if (details.artworkUrl) console.log(`artwork_url\t${details.artworkUrl}`);
-    details.topArtists.forEach(a => console.log(`artist\t${a.name}\t${a.count}`));
-    details.genres.forEach(g => console.log(`genre\t${g.name}\t${g.count}`));
+    console.log(`playlist\t${tsv(details.id)}\t${tsv(details.name)}\t${details.trackCount}\t${details.totalDuration}\t${tsv(details.description)}`);
+    if (details.artworkPath) console.log(`artwork\t${tsv(details.artworkPath)}`);
+    if (details.artworkUrl) console.log(`artwork_url\t${tsv(details.artworkUrl)}`);
+    details.topArtists.forEach(a => console.log(`artist\t${tsv(a.name)}\t${a.count}`));
+    details.genres.forEach(g => console.log(`genre\t${tsv(g.name)}\t${g.count}`));
     return;
   }
 

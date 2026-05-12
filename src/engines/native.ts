@@ -1,4 +1,5 @@
 import { $ } from "bun";
+import { existsSync } from "fs";
 import type {
   EngineCapabilities,
   MusicEngine,
@@ -21,32 +22,79 @@ import type { DeviceKind } from "../lib/types";
  * No auth needed, no rate limits. macOS only.
  */
 
+const SYSTEM_MUSIC_APP_PATH = "/System/Applications/Music.app";
+
+export function createMusicApplicationSource(appPath = SYSTEM_MUSIC_APP_PATH): string {
+  return existsSync(appPath) ? `Application(${JSON.stringify(appPath)})` : 'Application("Music")';
+}
+
+function resolveMusicApplicationReferences(script: string): string {
+  return script.replaceAll('Application("Music")', createMusicApplicationSource());
+}
+
+export function shouldRetryAfterMusicError(error: string): boolean {
+  return error.includes("not running")
+    || error.includes("-1728")
+    || error.includes("-1701")
+    || error.includes("-10827")
+    || error.includes("Parameter is missing");
+}
+
+function isMusicScriptingUnavailableError(error: string): boolean {
+  return error.includes("-1701")
+    || error.includes("-10827")
+    || error.includes("Parameter is missing");
+}
+
 async function ensureMusicRunning(): Promise<void> {
-  const check = await $`osascript -l JavaScript -e 'Application("Music").running()'`.quiet().nothrow();
+  const musicApp = createMusicApplicationSource();
+  const check = await $`osascript -l JavaScript -e ${`${musicApp}.running()`}`.quiet().nothrow();
   if (check.stdout.toString().trim() === "true") return;
 
   // Launch hidden — no window popping up
-  await $`osascript -l JavaScript -e 'const app = Application("Music"); app.launch()'`.quiet().nothrow();
+  await $`osascript -l JavaScript -e ${`const app = ${musicApp}; app.launch()`}`.quiet().nothrow();
+  if (musicApp !== 'Application("Music")') {
+    await $`open -gj ${SYSTEM_MUSIC_APP_PATH}`.quiet().nothrow();
+  }
 
   // Wait up to 5s for it to be ready
   for (let i = 0; i < 10; i++) {
     await Bun.sleep(500);
-    const ready = await $`osascript -l JavaScript -e 'Application("Music").running()'`.quiet().nothrow();
+    const ready = await $`osascript -l JavaScript -e ${`${musicApp}.running()`}`.quiet().nothrow();
     if (ready.stdout.toString().trim() === "true") return;
   }
   throw new ExternalServiceError("Music.app failed to start.", "Try opening Music.app manually.");
 }
 
 async function jxa(script: string): Promise<string> {
-  const result = await $`osascript -l JavaScript -e ${script}`.quiet().nothrow();
+  const resolvedScript = resolveMusicApplicationReferences(script);
+  const result = await $`osascript -l JavaScript -e ${resolvedScript}`.quiet().nothrow();
   if (result.exitCode !== 0) {
     const err = result.stderr.toString().trim();
     // Music.app not running — launch it silently and retry
-    if (err.includes("not running") || err.includes("-1728")) {
-      await ensureMusicRunning();
-      const retry = await $`osascript -l JavaScript -e ${script}`.quiet().nothrow();
+    if (shouldRetryAfterMusicError(err)) {
+      try {
+        await ensureMusicRunning();
+      } catch (launchErr) {
+        if (isMusicScriptingUnavailableError(err)) {
+          throw new ExternalServiceError(
+            "Music.app is running, but its scripting interface is unavailable.",
+            "Grant the calling app Automation permission for Music.app. In Codex/cmux sessions, run the whole command through `launchctl asuser $(id -u) ...`.",
+            launchErr,
+          );
+        }
+        throw launchErr;
+      }
+      const retry = await $`osascript -l JavaScript -e ${resolvedScript}`.quiet().nothrow();
       if (retry.exitCode !== 0) {
-        throw new ExternalServiceError(`JXA error: ${retry.stderr.toString().trim()}`);
+        const retryErr = retry.stderr.toString().trim();
+        if (isMusicScriptingUnavailableError(retryErr)) {
+          throw new ExternalServiceError(
+            "Music.app is running, but its scripting interface is unavailable.",
+            "Grant the calling app Automation permission for Music.app. In Codex/cmux sessions, run the whole command through `launchctl asuser $(id -u) ...`.",
+          );
+        }
+        throw new ExternalServiceError(`JXA error: ${retryErr}`);
       }
       return retry.stdout.toString().trim();
     }

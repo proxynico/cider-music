@@ -19,7 +19,7 @@ The native engine works out of the box on macOS -- no API keys, no rate limits, 
 ## Install
 
 ```bash
-git clone https://github.com/proxynico/cider-music.git
+git clone https://github.com/proxynico/aria.git cider-music
 cd cider-music
 bun install
 bun link

@@ -1,3 +1,4 @@
+import type { LibraryAudit } from "./library-audit";
 import type { OutputMode, Track, Album, Artist, Playlist, PlaylistDetails, PlaybackState, Device, SearchResults } from "./types";
 import { isCiderError, ValidationError } from "./errors";
 
@@ -250,6 +251,109 @@ export function outputPlaylistDetails(details: PlaylistDetails, mode: OutputMode
       console.log(`  ${c(WHITE, g.name.padEnd(25))} ${c(DIM, bar)} ${c(DIM, String(g.count))}`);
     }
   }
+}
+
+export function outputLibraryAudit(audit: LibraryAudit, mode: OutputMode) {
+  if (mode === "json") return outputJson(audit);
+  if (mode === "plain") {
+    console.log(`tracks\t${audit.counts.tracks}`);
+    console.log(`albums\t${audit.counts.albums}`);
+    console.log(`artists\t${audit.counts.artists}`);
+    console.log(`playlists\t${audit.counts.playlists}`);
+    console.log(`orphans\t${audit.counts.tracksNotFoundInAnyPlaylist}`);
+    console.log(`duplicates\t${audit.counts.duplicateNameArtistBuckets}`);
+    console.log(`exact_catalog_duplicates\t${audit.counts.exactCatalogDuplicateBuckets}`);
+    return;
+  }
+
+  console.log(c(BOLD + WHITE, "Library Audit"));
+  outputKeyValue("Tracks", String(audit.counts.tracks));
+  outputKeyValue("Albums", String(audit.counts.albums));
+  outputKeyValue("Artists", String(audit.counts.artists));
+  outputKeyValue("Playlists", String(audit.counts.playlists));
+  outputKeyValue("Tracks outside playlists", String(audit.counts.tracksNotFoundInAnyPlaylist));
+  outputKeyValue("Duplicate name/artist buckets", String(audit.counts.duplicateNameArtistBuckets));
+  outputKeyValue("Exact catalog duplicate buckets", String(audit.counts.exactCatalogDuplicateBuckets));
+
+  if (audit.topGenres.length > 0) {
+    console.log(c(BOLD + CYAN, "\nTop Genres"));
+    audit.topGenres.slice(0, 10).forEach(item => console.log(`  ${item.name}: ${item.count}`));
+  }
+  if (audit.playlists.largest.length > 0) {
+    console.log(c(BOLD + CYAN, "\nLargest Playlists"));
+    audit.playlists.largest.slice(0, 10).forEach(item => console.log(`  ${item.name}: ${item.fetchedTrackCount} tracks, ${item.durationHours}h`));
+  }
+}
+
+export function outputLibraryDuplicates(audit: LibraryAudit, mode: OutputMode, limit: number) {
+  const payload = {
+    duplicateNameArtistBuckets: audit.duplicateCandidates.length,
+    exactCatalogDuplicateBuckets: audit.exactCatalogDuplicates.length,
+    duplicateCandidates: audit.duplicateCandidates.slice(0, limit),
+    exactCatalogDuplicates: audit.exactCatalogDuplicates.slice(0, limit),
+  };
+  if (mode === "json") return outputJson(payload);
+  if (mode === "plain") {
+    payload.duplicateCandidates.forEach(item => console.log(`duplicate\t${tsv(item.key)}\t${item.count}`));
+    payload.exactCatalogDuplicates.forEach(item => console.log(`exact_catalog_duplicate\t${tsv(item.catalogId)}\t${item.count}`));
+    return;
+  }
+
+  console.log(c(BOLD + WHITE, "Duplicate Candidates"));
+  if (payload.duplicateCandidates.length === 0 && payload.exactCatalogDuplicates.length === 0) {
+    console.log(c(DIM, "No duplicate candidates found"));
+    return;
+  }
+  payload.duplicateCandidates.forEach(item => {
+    console.log(`${c(CYAN, item.key)} ${c(DIM, `${item.count} tracks`)}`);
+    item.tracks.slice(0, 5).forEach(track => console.log(`  ${track.name} ${c(DIM, "--")} ${track.album}`));
+  });
+  if (payload.exactCatalogDuplicates.length > 0) {
+    console.log(c(BOLD + CYAN, "\nExact Catalog Duplicates"));
+    payload.exactCatalogDuplicates.forEach(item => console.log(`  ${item.catalogId}: ${item.count}`));
+  }
+}
+
+export function outputLibraryOrphans(audit: LibraryAudit, mode: OutputMode, limit: number) {
+  const tracks = audit.orphanTracks.slice(0, limit);
+  if (mode === "json") return outputJson({ count: audit.orphanTracks.length, tracks });
+  if (mode === "plain") return tracks.forEach(outputPlainTrack);
+
+  console.log(c(BOLD + WHITE, `Tracks Outside Playlists (${audit.orphanTracks.length})`));
+  if (tracks.length === 0) {
+    console.log(c(DIM, "No orphan tracks found"));
+    return;
+  }
+  tracks.forEach((track, index) => outputHumanTrack(track, index));
+}
+
+export function outputLibraryThemes(audit: LibraryAudit, mode: OutputMode, limit: number) {
+  const suggestions = audit.themeSuggestions.map(theme => ({
+    ...theme,
+    candidates: theme.candidates.slice(0, limit),
+  })).filter(theme => theme.candidates.length > 0);
+
+  if (mode === "json") return outputJson({ count: suggestions.length, suggestions });
+  if (mode === "plain") {
+    suggestions.forEach(theme => {
+      theme.candidates.forEach(candidate => {
+        console.log(`theme_candidate\t${tsv(theme.playlistName)}\t${candidate.score}\t${tsv(candidate.track.id)}\t${tsv(candidate.track.name)}\t${tsv(candidate.track.artist)}\t${tsv(candidate.reasons.join(","))}`);
+      });
+    });
+    return;
+  }
+
+  console.log(c(BOLD + WHITE, "Theme Suggestions"));
+  if (suggestions.length === 0) {
+    console.log(c(DIM, "No theme suggestions found"));
+    return;
+  }
+  suggestions.forEach(theme => {
+    console.log(c(BOLD + CYAN, `\n${theme.playlistName}`));
+    theme.candidates.forEach(candidate => {
+      console.log(`  ${candidate.track.name} ${c(DIM, "--")} ${candidate.track.artist} ${c(DIM, `(${candidate.reasons.join(", ")})`)}`);
+    });
+  });
 }
 
 export function outputKeyValue(key: string, value: string) {

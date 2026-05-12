@@ -183,6 +183,7 @@ interface AMResponse {
     playlists?: { data: AMResource[] };
   };
   data?: AMResource[];
+  next?: string;
 }
 
 type ApiRequest = <T>(path: string, params?: Record<string, string>) => Promise<T>;
@@ -191,6 +192,11 @@ type ConfigLoader = () => Promise<CiderConfig>;
 interface ApiEngineDeps {
   request?: ApiRequest;
   configLoader?: ConfigLoader;
+}
+
+interface ApiPage {
+  path: string;
+  params: Record<string, string>;
 }
 
 // ── Safe field extraction from untyped API responses ──
@@ -304,6 +310,15 @@ function formatArtwork(artwork: unknown): string | undefined {
   return url.replace("{w}", "300").replace("{h}", "300");
 }
 
+function parseNextPage(next: string): ApiPage {
+  const url = new URL(next, AMP_API_BASE);
+  const path = url.pathname.startsWith("/v1/") ? url.pathname.slice(3) : url.pathname;
+  return {
+    path,
+    params: Object.fromEntries(url.searchParams.entries()),
+  };
+}
+
 export class ApiEngine implements MusicEngine {
   name = "api";
   capabilities: EngineCapabilities = {
@@ -339,6 +354,28 @@ export class ApiEngine implements MusicEngine {
     const storefront = data.data?.[0]?.id;
     cachedStorefront = storefront || "us";
     return cachedStorefront;
+  }
+
+  private async requestAllData(path: string, params: Record<string, string>, maxItems = Infinity): Promise<AMResource[]> {
+    const resources: AMResource[] = [];
+    let page: ApiPage | null = { path, params };
+    let pageCount = 0;
+
+    while (page && resources.length < maxItems) {
+      pageCount++;
+      if (pageCount > 1000) {
+        throw new ExternalServiceError(
+          "Apple Music API pagination exceeded 1000 pages.",
+          "The API returned too many continuation links; try a lower limit.",
+        );
+      }
+
+      const data: AMResponse = await this.request<AMResponse>(page.path, page.params);
+      resources.push(...(data.data || []));
+      page = data.next ? parseNextPage(data.next) : null;
+    }
+
+    return resources.slice(0, maxItems);
   }
 
   // ── Playback (not supported via API — delegate to native) ──
@@ -445,18 +482,18 @@ export class ApiEngine implements MusicEngine {
   // ── Library ──
 
   async getPlaylists(): Promise<Playlist[]> {
-    const data = await this.request<AMResponse>("/me/library/playlists", {
+    const data = await this.requestAllData("/me/library/playlists", {
       limit: "100",
     });
-    return (data.data || []).map(parseApiPlaylist);
+    return data.map(parseApiPlaylist);
   }
 
   async getPlaylistTracks(playlistId: string): Promise<Track[]> {
     const apiPlaylistId = resolveApiLibraryId(playlistId, "Playlist");
-    const data = await this.request<AMResponse>(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}/tracks`, {
+    const data = await this.requestAllData(`/me/library/playlists/${encodeURIComponent(apiPlaylistId)}/tracks`, {
       limit: "100",
     });
-    return (data.data || []).map(parseApiTrack);
+    return data.map(parseApiTrack);
   }
 
   async getPlaylistInfo(playlistId: string): Promise<PlaylistDetails> {
@@ -504,19 +541,19 @@ export class ApiEngine implements MusicEngine {
   }
 
   async getLibraryTracks(limit = 50, offset = 0): Promise<Track[]> {
-    const data = await this.request<AMResponse>("/me/library/songs", {
+    const data = await this.requestAllData("/me/library/songs", {
       limit: String(limit),
       offset: String(offset),
-    });
-    return (data.data || []).map(parseApiTrack);
+    }, limit);
+    return data.map(parseApiTrack);
   }
 
   async getLibraryAlbums(limit = 50, offset = 0): Promise<Album[]> {
-    const data = await this.request<AMResponse>("/me/library/albums", {
+    const data = await this.requestAllData("/me/library/albums", {
       limit: String(limit),
       offset: String(offset),
-    });
-    return (data.data || []).map(parseApiAlbum);
+    }, limit);
+    return data.map(parseApiAlbum);
   }
 
   // ── Devices (not available via API) ──

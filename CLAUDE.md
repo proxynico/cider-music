@@ -1,126 +1,156 @@
 # Cider Music
 
-Apple Music CLI for power users and AI agents. Inspired by [Spogo](https://github.com/steipete/spogo) (Spotify CLI).
+Apple Music CLI for power users and AI agents.
 
-GitHub repo: `https://github.com/proxynico/cider-music`
+Repo: `https://github.com/proxynico/cider-music`
+
+## What This App Is
+
+Cider Music is a Bun/TypeScript command-line tool for Apple Music. It has two
+jobs:
+
+1. Control and inspect Music.app locally on macOS.
+2. Read/search Apple Music catalog and cloud-library data with agent-friendly
+   JSON output.
+
+It also includes read-only library gardening commands for auditing duplicates,
+orphan tracks, playlist shape, and theme suggestions.
 
 ## Stack
 
-- **Runtime:** Bun
-- **Language:** TypeScript (strict mode)
-- **CLI framework:** Commander.js
-- **macOS integration:** JXA (JavaScript for Automation) via `osascript`
-- **Apple Music API:** Cookie-based auth against `amp-api.music.apple.com`
-- **Secrets:** macOS Keychain via `security` CLI
+- Runtime: Bun
+- Language: TypeScript, strict mode
+- CLI framework: Commander.js
+- Native control: Music.app JXA through `osascript`
+- API reads: `amp-api.music.apple.com`
+- Secrets: macOS Keychain through `security`
 
-## Architecture
+## Engines
 
-Three engines behind one interface (`MusicEngine`):
+All engines implement `MusicEngine` in `src/lib/types.ts`.
 
 | Engine | Purpose | Auth |
-|--------|---------|------|
-| **Native** (`engines/native.ts`) | Controls Music.app via JXA. Playback, library, playlists, shuffle, repeat, AirPlay. No network. Auto-launches Music.app silently if not running. | None |
-| **API** (`engines/api.ts`) | Full Apple Music catalog + library via `amp-api.music.apple.com`. Search 100M+ tracks. | `media-user-token` in Keychain |
-| **Auto** (`engines/auto.ts`) | Routes: native for playback, API for catalog/library when authenticated. If API auth fails, error propagates (no silent fallback). | Optional |
+| --- | --- | --- |
+| `native` | Music.app playback, local library, playlist edits, devices | None |
+| `api` | Apple Music catalog and cloud-library reads | `media-user-token` in Keychain |
+| `auto` | Native for playback, API for catalog/library when authenticated | Optional |
 
-All engines implement `MusicEngine` (defined in `lib/types.ts`). Each engine declares `capabilities: EngineCapabilities`. The auto engine is the default.
+Important: `auto` must not silently hide authenticated API failures. If auth is
+configured and the API call fails, surface the real error.
 
-## Project Structure
+## Project Map
 
-```
+```text
 src/
-  index.ts              Entry point. Commander setup, engine factory, config loading.
-  engines/
-    native.ts           Music.app control via JXA (osascript -l JavaScript)
-    api.ts              amp-api.music.apple.com with cookie auth + JWT extraction
-    auto.ts             Smart routing between native and API
+  index.ts              Commander entrypoint, engine factory, config loading
   commands/
     playback.ts         play, pause, resume, next, prev, seek, status, volume, shuffle, repeat
     search.ts           search track|album|artist|playlist|all
-    library.ts          library tracks|albums|playlists + playlist info|add|remove|tracks|list
+    library.ts          tracks, albums, playlists, audit, duplicates, orphans, themes
     auth.ts             auth import|token|status|clear
     config.ts           config status|engine|storefront
     devices.ts          AirPlay device listing
-    queue.ts            Queue add (fails explicitly — reliable queueing not implemented)
+    queue.ts            queue add, explicit unsupported operation
+  engines/
+    native.ts           Music.app JXA engine
+    api.ts              Apple Music API engine
+    auto.ts             Native/API router
   lib/
-    types.ts            Domain types, MusicEngine interface, EngineCapabilities, DeviceKind
-    entities.ts         Entity identity system (source-qualified IDs, ref parsing, ID validation)
-    errors.ts           Error hierarchy: CiderError > ValidationError, AuthError, ExternalServiceError, UnsupportedOperationError
-    input.ts            Input parsing (parseInteger with bounds checking)
-    output.ts           JSON/plain/human output formatting + outputKeyValue helper
-    config.ts           ~/.config/cider-music/config.json management
-    cookies.ts          Browser cookie extraction (Safari, Chrome, Firefox, Edge, Brave) with timeouts
-    secrets.ts          macOS Keychain read/write/clear for media-user-token
+    types.ts            Domain types and MusicEngine interface
+    entities.ts         Source-qualified entity IDs and validation
+    errors.ts           CiderError hierarchy
+    input.ts            Input parsing
+    output.ts           Human, JSON, and plain output helpers
+    library-audit.ts    Read-only library gardening analysis
+    config.ts           Config and token facade
+    cookies.ts          Browser cookie extraction
+    secrets.ts          Keychain storage
 tests/
-  auto.test.ts          Auto engine routing logic
-  entities.test.ts      Entity ref encoding/decoding
-  native.test.ts        Native engine derive helpers
-  input.test.ts         Integer parsing + validation
-  validation.test.ts    Raw ID validation + entity ref parsing
-  errors.test.ts        Error hierarchy + codes + hints
-  api-parsing.test.ts   API response identity building
-  output.test.ts        Output mode and plain TSV escaping
-  config.test.ts        Config parsing and validation
-  cli.test.ts           CLI behavior contracts
+  api-parsing.test.ts   API identity, validation, storefront, pagination
+  library-audit.test.ts Library audit analysis
+  *.test.ts             Engine, output, config, validation, CLI contracts
 ```
 
-## Key Conventions
+## Command Surface
 
-- Every command supports three output modes: `--json`, `--plain` (tab-separated), default (colorized human)
-- Errors use the `CiderError` hierarchy with error codes and optional hints. Never raw `console.error()`.
-- All output goes through `lib/output.ts` helpers (`outputMessage`, `outputKeyValue`, `outputErrorDetails`)
-- Entity IDs are source-qualified: `native:persistent:ABC123`, `api:library:l.123`, `api:catalog:1234567`
-- Raw IDs are validated against `[A-Za-z0-9._-]+` before embedding in JXA scripts
-- JXA scripts run via `jxa()` and `jxaJson<T>()` helpers; all interpolated values use `JSON.stringify()`
-- API engine developer token is extracted from web player JS with JWT validation (alg+typ check) and 30-min cache TTL
-- Tokens stored in macOS Keychain (service: `cider-music`), not in config file
-- Config lives at `~/.config/cider-music/config.json` (engine + storefront defaults only)
-- Artwork exports to `/tmp/cider-music-artwork-{id}.png`
-- Codex/cmux tool sessions can lack a usable HI Services connection even with
-  Automation permission. For real Music.app native checks from that context,
-  run the whole CLI inside the GUI user session:
-  `launchctl asuser $(id -u) bun run src/index.ts status --json`
-
-## Commands
-
-```
-Playback:    play [query] | pause | resume | next | prev | seek <s> | status
+```text
+Playback:    play [query] | pause | resume | next | prev | seek <seconds> | status
 Volume:      volume [0-100]
 Modes:       shuffle [on|off] | repeat [off|one|all]
 Search:      search track|album|artist|playlist|all <query> [-l limit]
 Library:     library tracks|albums|playlists | library playlist <id>
+Gardening:   library audit|duplicates|orphans|themes
 Playlists:   playlist info <id> | playlist add <id> <trackIds...> | playlist remove <id> <trackIds...>
-Queue:       queue add <trackId>   (fails explicitly)
+Queue:       queue add <trackId> (explicitly unsupported)
 Devices:     devices
 Auth:        auth import|token|status|clear
 Config:      config status | config engine [native|api|auto] | config storefront [code|auto]
 ```
 
-## Development
+## Key Rules
+
+- Preserve human, `--json`, and `--plain` output for every command.
+- Use output helpers from `src/lib/output.ts`; do not raw-print errors.
+- Use `CiderError` subclasses for expected failures.
+- Keep IDs source-qualified:
+  - `native:persistent:*`
+  - `api:library:*`
+  - `api:catalog:*`
+- Store Apple Music tokens only in Keychain.
+- Never write auth tokens to config, docs, logs, or tests.
+- Native JXA input must be validated or inserted with `JSON.stringify()`.
+- Library gardening commands are read-only until an explicit review/apply flow
+  exists.
+- Queue management stays explicitly unsupported unless a reliable Music.app
+  queue path is proven.
+
+## Local Commands
 
 ```bash
 bun install
-bun run src/index.ts status     # run directly
-bun link                        # link globally as `cider-music`
-bun run build                   # compile to dist/cider-music
-bun run typecheck               # tsc --noEmit
-bun test                        # 51 tests across 10 files
-bun run check                   # typecheck + test
+bun run src/index.ts status --json
+bun run src/index.ts search track "radiohead" --json
+bun run src/index.ts --engine api library audit --max-items 100 --json
+bun run typecheck
+bun test
+bun run check
+bun run build
 ```
 
-## Adding a New Command
+Current suite:
 
-1. Create handler in `src/commands/` following existing patterns
-2. Accept `program: Command` and `getEngine: () => MusicEngine`
-3. Handle all three output modes (`getOutputMode(program.opts())`)
-4. Use `CiderError` subclasses for errors (never raw `throw new Error()`)
-5. Register in `src/index.ts`
+```bash
+bun test  # 55 tests across 11 files
+```
 
-## Adding to the MusicEngine Interface
+## macOS Notes
 
-1. Add method signature to `MusicEngine` in `lib/types.ts`
-2. Update `EngineCapabilities` if adding a new capability category
-3. Implement in `native.ts` (JXA), `api.ts` (web API), and `auto.ts` (routing)
-4. API engine throws `UnsupportedOperationError` for operations it can't support
-5. Auto engine delegates playback to native, data queries to API when authenticated
-6. Add tests in `tests/`
+Music.app scripting needs a normal GUI session plus Automation permission for
+the calling app.
+
+If native commands fail inside Codex/cmux but work in Terminal, launch the whole
+CLI through the GUI user session:
+
+```bash
+launchctl asuser "$(id -u)" bun run src/index.ts status --json
+```
+
+Do not wrap only `osascript`; run the full CLI command that way.
+
+## Adding Work
+
+For a command:
+
+1. Add command wiring in `src/commands/`.
+2. Keep data shaping in `src/lib/` when it is reusable or testable.
+3. Accept `program: Command` and `getEngine: () => MusicEngine`.
+4. Support human, JSON, and plain output.
+5. Add focused tests.
+6. Run `bun run check`.
+
+For engine behavior:
+
+1. Update `MusicEngine` in `src/lib/types.ts`.
+2. Implement native, API, and auto behavior.
+3. Throw `UnsupportedOperationError` where an engine cannot support the method.
+4. Add tests before relying on the behavior.

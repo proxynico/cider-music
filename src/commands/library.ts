@@ -1,10 +1,34 @@
 import type { Command } from "commander";
 import type { MusicEngine } from "../lib/types";
 import { parseInteger } from "../lib/input";
-import { getOutputMode, outputTracks, outputAlbums, outputPlaylists, outputPlaylistDetails, outputJson, outputMessage } from "../lib/output";
+import { analyzeLibrarySnapshot, collectLibrarySnapshot } from "../lib/library-audit";
+import {
+  getOutputMode,
+  outputTracks,
+  outputAlbums,
+  outputPlaylists,
+  outputPlaylistDetails,
+  outputJson,
+  outputMessage,
+  outputLibraryAudit,
+  outputLibraryDuplicates,
+  outputLibraryOrphans,
+  outputLibraryThemes,
+} from "../lib/output";
 
 export function registerLibraryCommands(program: Command, getEngine: () => MusicEngine) {
   const library = program.command("library").alias("lib").description("Browse your music library");
+
+  async function buildAudit(opts: { pageSize?: string; maxItems?: string; suggestions?: string } = {}) {
+    const engine = getEngine();
+    const snapshot = await collectLibrarySnapshot(engine, {
+      pageSize: parseInteger("page size", opts.pageSize ?? "100", { min: 1, max: 100 }),
+      maxItems: parseInteger("max items", opts.maxItems ?? "20000", { min: 1 }),
+    });
+    return analyzeLibrarySnapshot(snapshot, {
+      suggestionsPerTheme: parseInteger("suggestions", opts.suggestions ?? "20", { min: 1 }),
+    });
+  }
 
   library
     .command("tracks")
@@ -55,6 +79,55 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
       const tracks = await engine.getPlaylistTracks(id);
       const mode = getOutputMode(program.opts());
       outputTracks(tracks, mode);
+    });
+
+  library
+    .command("audit")
+    .description("Read-only library audit: counts, genres, playlists, duplicates, orphans, and theme suggestions")
+    .option("--page-size <n>", "Library page size", "100")
+    .option("--max-items <n>", "Max library tracks/albums to scan", "20000")
+    .option("--suggestions <n>", "Theme suggestions per playlist", "20")
+    .action(async (opts) => {
+      const audit = await buildAudit(opts);
+      const mode = getOutputMode(program.opts());
+      outputLibraryAudit(audit, mode);
+    });
+
+  library
+    .command("duplicates")
+    .description("Show read-only duplicate candidates")
+    .option("-l, --limit <n>", "Max duplicate buckets per type", "25")
+    .option("--page-size <n>", "Library page size", "100")
+    .option("--max-items <n>", "Max library tracks/albums to scan", "20000")
+    .action(async (opts) => {
+      const audit = await buildAudit(opts);
+      const mode = getOutputMode(program.opts());
+      outputLibraryDuplicates(audit, mode, parseInteger("limit", opts.limit, { min: 1 }));
+    });
+
+  library
+    .command("orphans")
+    .description("Show tracks that are not represented in any normal playlist")
+    .option("-l, --limit <n>", "Max tracks to output", "100")
+    .option("--page-size <n>", "Library page size", "100")
+    .option("--max-items <n>", "Max library tracks/albums to scan", "20000")
+    .action(async (opts) => {
+      const audit = await buildAudit(opts);
+      const mode = getOutputMode(program.opts());
+      outputLibraryOrphans(audit, mode, parseInteger("limit", opts.limit, { min: 1 }));
+    });
+
+  library
+    .command("themes")
+    .description("Suggest orphan tracks that fit existing playlist themes")
+    .option("-l, --limit <n>", "Max suggestions per playlist to output", "20")
+    .option("--page-size <n>", "Library page size", "100")
+    .option("--max-items <n>", "Max library tracks/albums to scan", "20000")
+    .option("--suggestions <n>", "Candidates to compute per playlist", "50")
+    .action(async (opts) => {
+      const audit = await buildAudit(opts);
+      const mode = getOutputMode(program.opts());
+      outputLibraryThemes(audit, mode, parseInteger("limit", opts.limit, { min: 1 }));
     });
 
   // ── Playlist info (details, artwork, description, stats) ──

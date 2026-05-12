@@ -1,20 +1,28 @@
 # Cider Music
 
-Apple Music CLI for power users and AI agents.
+Apple Music from the command line.
 
-Like [Spogo](https://github.com/steipete/spogo) for Spotify, but for Apple Music. Control playback, search the catalog, manage your library -- all from the terminal with JSON output for automation.
+Cider Music controls Music.app on macOS, searches Apple Music, reads your
+library, and helps audit and improve your playlists. It is built for both
+humans and agents: every command has readable terminal output plus `--json` and
+`--plain` modes for automation.
 
-## Architecture
+It is inspired by [Spogo](https://github.com/steipete/spogo), but for Apple
+Music.
 
-Three engine modes:
+## What It Does
 
-| Engine | What it does | Auth needed |
-|--------|-------------|-------------|
-| **Native** | Controls Music.app via JXA (JavaScript for Automation). Playback, library, playlists, shuffle, repeat, AirPlay. | None |
-| **API** | Queries Apple Music catalog and library via `amp-api.music.apple.com`. 100M+ tracks. | Apple Music web token |
-| **Auto** (default) | Native for playback, API for catalog/library when authenticated. Error propagates on API failure -- no silent fallback. | Optional |
+- Control playback: play, pause, skip, seek, volume, shuffle, repeat.
+- Read playback status from Music.app.
+- Search Apple Music catalog tracks, albums, artists, and playlists.
+- Browse your Apple Music library and playlists.
+- Audit your library for duplicates, orphan tracks, playlist shape, genres, and
+  theme suggestions.
+- Add or remove tracks from playlists through Music.app when using native IDs.
+- Return stable JSON for scripts and AI agents.
 
-The native engine works out of the box on macOS -- no API keys, no rate limits, no auth. The API engine adds full catalog search and richer library metadata using your browser's `media-user-token`. Tokens are stored in the macOS Keychain.
+The library-management commands are read-only. They do not delete tracks or
+modify playlists.
 
 ## Install
 
@@ -25,47 +33,55 @@ bun install
 bun link
 ```
 
-### Build single binary
+After linking:
+
+```bash
+cider-music --version
+```
+
+To build a single binary:
 
 ```bash
 bun run build
-# Creates ./dist/cider-music
 ```
+
+The binary is written to `dist/cider-music`.
 
 ## Quick Start
 
 ```bash
-# Check what's playing
+# Current playback state
 cider-music status
 
-# Play / pause / skip
+# Playback controls
 cider-music play
 cider-music pause
 cider-music next
 cider-music prev
+cider-music seek 60
 
-# Search your library (or full catalog with API auth)
-cider-music search track "radiohead"
-cider-music search album "ok computer"
-cider-music search artist "beatles"
-
-# Volume
-cider-music volume        # get current
-cider-music volume 60     # set to 60
-
-# Shuffle and repeat
+# Volume and modes
+cider-music volume
+cider-music volume 60
 cider-music shuffle on
 cider-music repeat all
 
-# Playlists
-cider-music library playlists
-cider-music library playlist <id>
-cider-music playlist info <id>
+# Search
+cider-music search track "radiohead"
+cider-music search album "ok computer"
+cider-music search artist "faye wong"
 
-# Defaults
-cider-music config status
-cider-music config engine auto
-cider-music config storefront auto
+# Library
+cider-music library tracks
+cider-music library albums
+cider-music library playlists
+cider-music library playlist <playlist-id>
+
+# Library gardening
+cider-music library audit
+cider-music library duplicates
+cider-music library orphans
+cider-music library themes
 ```
 
 ## Output Modes
@@ -73,147 +89,185 @@ cider-music config storefront auto
 Every command supports three output modes:
 
 ```bash
-# Human-readable (default) -- colorized, formatted
-cider-music status
-
-# JSON -- machine-readable, stable schema
-cider-music status --json
-
-# Plain -- tab-separated, pipe-friendly
-cider-music status --plain
+cider-music status          # human-readable
+cider-music status --json   # structured JSON
+cider-music status --plain  # tab-separated output
 ```
 
-The `--json` flag makes Cider Music agent-friendly. AI agents can parse structured output without scraping terminal formatting.
+Use `--json` for agents and scripts. Use `--plain` for shell pipelines.
 
-## Entity IDs
+## Engines
 
-All entities (tracks, albums, artists, playlists) carry source-qualified IDs:
+Cider Music has three engines.
 
-| Format | Meaning |
-|--------|---------|
-| `native:persistent:ABC123` | Music.app persistent ID |
-| `api:library:l.ABC123` | Apple Music library ID |
-| `api:catalog:1234567` | Apple Music catalog ID |
-| `native:derived:album:...` | Derived from track search (no direct ID) |
+| Engine | Use it for | Auth |
+| --- | --- | --- |
+| `native` | Music.app playback, local library, playlist edits, AirPlay devices | None |
+| `api` | Apple Music catalog and cloud library reads | Apple Music web token |
+| `auto` | Native for playback, API for catalog/library when authenticated | Optional |
 
-JSON output includes `id`, `source`, and explicit `persistentId`, `libraryId`, `catalogId` fields when available. Native-only mutation commands (playlist add/remove) require native persistent IDs.
+`auto` is the default. It does not hide API failures. If API auth exists and an
+API request fails, the real error is shown instead of silently falling back.
 
-If Cider Music cannot perform an operation safely, it fails explicitly rather than doing something surprising.
-
-## Apple Music API Setup (Optional)
-
-The native engine handles playback without any setup. To unlock **full catalog search**, set up the API engine:
+Choose an engine per command:
 
 ```bash
-# Auto-import from Safari (easiest)
-cider-music auth import --browser safari
-
-# Or from Chrome/Firefox/Edge/Brave
-cider-music auth import --browser chrome
-
-# Or paste the token manually
-cider-music auth token <paste-here>
-
-# Check status
-cider-music auth status
+cider-music --engine native status
+cider-music --engine api search track "new song"
+cider-music --engine auto library audit
 ```
 
-Tokens are stored in the macOS Keychain (`cider-music` service), not in config files.
-
-## Engine Selection
-
-```bash
-# Auto (default): native for playback, API for catalog/library when available
-cider-music search track "new song"
-
-# Force native: library-only search, no network
-cider-music --engine native search track "radiohead"
-
-# Force API: catalog search (requires auth)
-cider-music --engine api search track "new release"
-```
-
-Persistent defaults:
+Persist defaults:
 
 ```bash
 cider-music config engine auto
 cider-music config storefront auto
 ```
 
-## All Commands
+## Apple Music API Auth
 
+Native playback works without auth. API search and cloud-library reads need the
+`media-user-token` cookie from a browser session logged into
+`music.apple.com`.
+
+```bash
+cider-music auth import --browser safari
+cider-music auth import --browser chrome
+cider-music auth import --browser firefox
+cider-music auth token <media-user-token>
+cider-music auth status
 ```
-Playback:    play [query] | pause | resume | next | prev | seek <s> | status
+
+Tokens are stored in macOS Keychain under the `cider-music` service. They are
+not written to config files.
+
+## Library Gardening
+
+Cider Music treats your Apple Music library as a collection to maintain, not
+just a list of tracks.
+
+```bash
+cider-music library audit --json
+```
+
+The audit reports:
+
+- total tracks, albums, artists, and playlists
+- largest and smallest playlists
+- top genres, artists, decades, and years
+- tracks not represented in any normal playlist
+- duplicate name/artist candidates
+- exact catalog duplicate candidates
+- orphan tracks that fit existing playlist themes
+- playlist read errors, such as Apple special playlists that are listed but not
+  readable through the API
+
+Focused commands:
+
+```bash
+cider-music library duplicates --json
+cider-music library orphans --json
+cider-music library themes --json
+```
+
+Useful limits while exploring:
+
+```bash
+cider-music library audit --max-items 500
+cider-music library orphans --limit 50
+cider-music library themes --limit 10 --suggestions 50
+```
+
+These commands are safe review surfaces. They do not delete, remove, or add
+anything.
+
+## IDs
+
+JSON output includes source-qualified IDs so commands know what kind of entity
+they are handling.
+
+| Format | Meaning |
+| --- | --- |
+| `native:persistent:ABC123` | Music.app persistent ID |
+| `api:library:l.ABC123` | Apple Music library ID |
+| `api:catalog:1234567` | Apple Music catalog ID |
+| `native:derived:album:...` | Derived native search result |
+
+Native-only mutation commands, such as playlist add/remove, require native
+persistent IDs.
+
+## Commands
+
+```text
+Playback:    play [query] | pause | resume | next | prev | seek <seconds> | status
 Volume:      volume [0-100]
 Modes:       shuffle [on|off] | repeat [off|one|all]
 Search:      search track|album|artist|playlist|all <query> [-l limit]
 Library:     library tracks|albums|playlists | library playlist <id>
+Gardening:   library audit|duplicates|orphans|themes
 Playlists:   playlist info <id> | playlist add <id> <trackIds...> | playlist remove <id> <trackIds...>
-Queue:       queue add <trackId>   (fails explicitly; reliable Music.app queueing not implemented)
+Queue:       queue add <trackId>   (fails explicitly; reliable queueing is not implemented)
 Devices:     devices
 Auth:        auth import|token|status|clear
 Config:      config status | config engine [native|api|auto] | config storefront [code|auto]
 ```
 
-## Global Flags
+Global flags:
 
-```
+```text
 --json         JSON output
 --plain        Tab-separated output
---no-color     Disable colors
+--no-color     Disable color output
 --engine <e>   native | api | auto
 -v, --verbose  Verbose output
 ```
 
 ## Requirements
 
-- macOS (native engine uses Music.app via JXA)
-- [Bun](https://bun.sh) runtime
-- Music.app (comes with macOS)
-- Apple Music subscription (for API catalog search)
+- macOS
+- Music.app
+- Bun
+- Apple Music subscription for API catalog/library features
 
-### Codex and GUI Automation
+Music.app scripting requires macOS Automation permission for the app running
+the command, usually Terminal, iTerm, Codex, or another shell host.
 
-Music.app scripting requires a normal macOS GUI session plus Automation
-permission for the calling app. If `cider-music status --json` works in your
-terminal but fails inside a Codex/cmux tool session with a scripting-interface
-error, run the whole command through the GUI user session:
+If Music.app works from a normal terminal but fails inside a Codex/cmux session,
+run the whole command through the GUI user session:
 
 ```bash
 launchctl asuser "$(id -u)" bun run src/index.ts status --json
 ```
 
-Do not wrap only `osascript` inside `launchctl asuser` from an already-running
-Codex-launched Bun process; launch the whole CLI command that way.
-
-## How It Works
-
-**Native engine**: Executes JXA scripts via `osascript` to control Music.app directly. No network, no rate limits, instant response. Supports playback, library search, playlist management, shuffle, repeat, and AirPlay device listing. All user inputs are validated and safely interpolated via `JSON.stringify()`.
-
-**API engine**: Uses the `media-user-token` from your browser (set when you log into music.apple.com) with Apple's `amp-api.music.apple.com` endpoints. The developer token is extracted from the web player's JS bundle with JWT validation and a 30-minute cache. Storefront is configurable and defaults to auto-discovery. API responses are parsed through type-safe extraction helpers.
-
-**Auto engine**: Combines both. Playback always goes through native. Search and library queries use API when authentication exists, otherwise native. If API auth exists but a request fails, the error surfaces immediately -- Cider Music never silently changes which engine handles a request.
-
-## Error Handling
-
-Cider Music uses a structured error hierarchy with error codes and actionable hints:
-
-- **ValidationError** -- invalid user input (bad integer, unknown engine, etc.)
-- **AuthError** -- missing or expired Apple Music token
-- **ExternalServiceError** -- Music.app not running, API failure, cookie extraction failure
-- **UnsupportedOperationError** -- operation not available on the selected engine
-
-All errors print to stderr with a colored message and optional hint line.
+Do not wrap only `osascript` inside `launchctl asuser`; launch the whole CLI
+that way.
 
 ## Development
 
 ```bash
 bun install
-bun run typecheck               # tsc --noEmit
-bun test                        # 51 tests across 10 files
-bun run check                   # typecheck + test
-bun run src/index.ts status     # run without building
+bun run src/index.ts status
+bun run typecheck
+bun test
+bun run check
+bun run build
 ```
+
+Current test suite:
+
+```bash
+bun test  # 55 tests across 11 files
+```
+
+## Design Rules
+
+- Preserve human, `--json`, and `--plain` output for every command.
+- Keep IDs source-qualified.
+- Store tokens only in Keychain.
+- Use structured `CiderError` errors and output helpers.
+- Keep library gardening read-only until an explicit apply/review flow exists.
+- Queue management intentionally fails because reliable Music.app queueing is
+  not implemented.
 
 ## License
 

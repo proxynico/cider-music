@@ -19,7 +19,7 @@ The native engine works out of the box on macOS -- no API keys, no rate limits, 
 ## Install
 
 ```bash
-git clone https://github.com/proxynico/aria.git cider-music
+git clone https://github.com/proxynico/cider-music.git
 cd cider-music
 bun install
 bun link
@@ -172,6 +172,20 @@ Config:      config status | config engine [native|api|auto] | config storefront
 - Music.app (comes with macOS)
 - Apple Music subscription (for API catalog search)
 
+### Codex and GUI Automation
+
+Music.app scripting requires a normal macOS GUI session plus Automation
+permission for the calling app. If `cider-music status --json` works in your
+terminal but fails inside a Codex/cmux tool session with a scripting-interface
+error, run the whole command through the GUI user session:
+
+```bash
+launchctl asuser "$(id -u)" bun run src/index.ts status --json
+```
+
+Do not wrap only `osascript` inside `launchctl asuser` from an already-running
+Codex-launched Bun process; launch the whole CLI command that way.
+
 ## How It Works
 
 **Native engine**: Executes JXA scripts via `osascript` to control Music.app directly. No network, no rate limits, instant response. Supports playback, library search, playlist management, shuffle, repeat, and AirPlay device listing. All user inputs are validated and safely interpolated via `JSON.stringify()`.
@@ -196,7 +210,7 @@ All errors print to stderr with a colored message and optional hint line.
 ```bash
 bun install
 bun run typecheck               # tsc --noEmit
-bun test                        # 40 tests across 8 files
+bun test                        # 51 tests across 10 files
 bun run check                   # typecheck + test
 bun run src/index.ts status     # run without building
 ```

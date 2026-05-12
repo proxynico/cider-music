@@ -2,6 +2,8 @@
 
 Apple Music CLI for power users and AI agents. Inspired by [Spogo](https://github.com/steipete/spogo) (Spotify CLI).
 
+GitHub repo: `https://github.com/proxynico/cider-music`
+
 ## Stack
 
 - **Runtime:** Bun
@@ -57,6 +59,9 @@ tests/
   validation.test.ts    Raw ID validation + entity ref parsing
   errors.test.ts        Error hierarchy + codes + hints
   api-parsing.test.ts   API response identity building
+  output.test.ts        Output mode and plain TSV escaping
+  config.test.ts        Config parsing and validation
+  cli.test.ts           CLI behavior contracts
 ```
 
 ## Key Conventions
@@ -71,6 +76,10 @@ tests/
 - Tokens stored in macOS Keychain (service: `cider-music`), not in config file
 - Config lives at `~/.config/cider-music/config.json` (engine + storefront defaults only)
 - Artwork exports to `/tmp/cider-music-artwork-{id}.png`
+- Codex/cmux tool sessions can lack a usable HI Services connection even with
+  Automation permission. For real Music.app native checks from that context,
+  run the whole CLI inside the GUI user session:
+  `launchctl asuser $(id -u) bun run src/index.ts status --json`
 
 ## Commands
 
@@ -95,7 +104,7 @@ bun run src/index.ts status     # run directly
 bun link                        # link globally as `cider-music`
 bun run build                   # compile to dist/cider-music
 bun run typecheck               # tsc --noEmit
-bun test                        # 40 tests across 8 files
+bun test                        # 51 tests across 10 files
 bun run check                   # typecheck + test
 ```
 

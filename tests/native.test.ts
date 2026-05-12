@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import { createMusicApplicationSource, deriveAlbumsFromTracks, deriveArtistsFromTracks, shouldRetryAfterMusicError } from "../src/engines/native";
+import {
+  createMusicApplicationSource,
+  deriveAlbumsFromTracks,
+  deriveArtistsFromTracks,
+  musicScriptingUnavailableRecovery,
+  shouldRetryAfterMusicError,
+} from "../src/engines/native";
 import type { Track } from "../src/lib/types";
 
 const tracks: Track[] = [
@@ -67,6 +73,13 @@ describe("native Music.app resolution", () => {
 
   test("retries when Music.app returns a scripting launch error", () => {
     expect(shouldRetryAfterMusicError("execution error: An error of type -10827 has occurred. (-10827)")).toBe(true);
+  });
+
+  test("explains the Codex sandbox recovery before Automation fallback", () => {
+    const recovery = musicScriptingUnavailableRecovery();
+
+    expect(recovery).toContain("outside the sandbox/escalated");
+    expect(recovery).toContain("Automation permission");
   });
 
 });

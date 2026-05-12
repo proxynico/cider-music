@@ -46,6 +46,13 @@ function isMusicScriptingUnavailableError(error: string): boolean {
     || error.includes("Parameter is missing");
 }
 
+export function musicScriptingUnavailableRecovery(): string {
+  return [
+    "If you are running from Codex/cmux, rerun the whole `cider-music ...` command outside the sandbox/escalated so it can attach to Music.app.",
+    "If it still fails outside the sandbox, grant the calling app Automation permission for Music.app in System Settings.",
+  ].join(" ");
+}
+
 async function ensureMusicRunning(): Promise<void> {
   const musicApp = createMusicApplicationSource();
   const check = await $`osascript -l JavaScript -e ${`${musicApp}.running()`}`.quiet().nothrow();
@@ -78,8 +85,8 @@ async function jxa(script: string): Promise<string> {
       } catch (launchErr) {
         if (isMusicScriptingUnavailableError(err)) {
           throw new ExternalServiceError(
-            "Music.app is running, but its scripting interface is unavailable.",
-            "Grant the calling app Automation permission for Music.app. In Codex/cmux sessions, run the whole command through `launchctl asuser $(id -u) ...`.",
+            "Music.app could not be launched or controlled by this process.",
+            musicScriptingUnavailableRecovery(),
             launchErr,
           );
         }
@@ -90,8 +97,8 @@ async function jxa(script: string): Promise<string> {
         const retryErr = retry.stderr.toString().trim();
         if (isMusicScriptingUnavailableError(retryErr)) {
           throw new ExternalServiceError(
-            "Music.app is running, but its scripting interface is unavailable.",
-            "Grant the calling app Automation permission for Music.app. In Codex/cmux sessions, run the whole command through `launchctl asuser $(id -u) ...`.",
+            "Music.app could not be launched or controlled by this process.",
+            musicScriptingUnavailableRecovery(),
           );
         }
         throw new ExternalServiceError(`JXA error: ${retryErr}`);

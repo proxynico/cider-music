@@ -219,7 +219,7 @@ Global flags:
 --plain        Tab-separated output
 --no-color     Disable color output
 --engine <e>   native | api | auto
--v, --verbose  Verbose output
+-v, --verbose  Show the underlying cause/stack when a command fails
 ```
 
 ## Requirements

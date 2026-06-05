@@ -13,7 +13,7 @@ import { registerQueueCommands } from "./commands/queue";
 import { registerConfigCommands } from "./commands/config";
 import { loadConfig } from "./lib/config";
 import { ValidationError } from "./lib/errors";
-import { setColorEnabled, outputErrorDetails } from "./lib/output";
+import { setColorEnabled, setVerboseEnabled, outputErrorDetails } from "./lib/output";
 import type { CiderConfig, MusicEngine } from "./lib/types";
 
 const VERSION = "0.1.0";
@@ -32,6 +32,9 @@ const program = new Command()
     const opts = program.opts();
     if (opts.noColor || process.env.NO_COLOR || process.env.TERM === "dumb") {
       setColorEnabled(false);
+    }
+    if (opts.verbose) {
+      setVerboseEnabled(true);
     }
     if (opts.json && opts.plain) {
       throw new ValidationError("--json and --plain cannot be used together");

@@ -12,12 +12,15 @@
     "link": "bun link",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
-    "check": "bun run typecheck && bun test"
+    "lint": "biome check src tests",
+    "format": "biome check --write src tests",
+    "check": "biome check src tests && bun run typecheck && bun test"
   },
   "dependencies": {
     "commander": "^13.1.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.4.16",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   }

@@ -116,7 +116,10 @@ function normalizeText(value: unknown): string {
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\([^)]*\)|\[[^\]]*]/g, "")
-    .replace(/\b(remaster(?:ed)?|explicit|clean|deluxe|bonus track|single version|album version|radio edit|mono|stereo)\b/g, "")
+    .replace(
+      /\b(remaster(?:ed)?|explicit|clean|deluxe|bonus track|single version|album version|radio edit|mono|stereo)\b/g,
+      "",
+    )
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
@@ -130,34 +133,32 @@ function decade(year?: number): string {
   return `${Math.floor(year / 10) * 10}s`;
 }
 
-function summarizeTrack(track: Track): Track {
-  return track;
-}
-
 function sortedPlaylistSummaries(playlistTracks: PlaylistTrackSnapshot[], topLimit: number): PlaylistAuditSummary[] {
-  return playlistTracks.map(({ playlist, tracks, error }) => {
-    const genres = new Map<string, number>();
-    const artists = new Map<string, number>();
-    const years = new Map<string, number>();
+  return playlistTracks
+    .map(({ playlist, tracks, error }) => {
+      const genres = new Map<string, number>();
+      const artists = new Map<string, number>();
+      const years = new Map<string, number>();
 
-    for (const track of tracks) {
-      increment(genres, track.genre || "Unknown");
-      increment(artists, track.artist || "Unknown");
-      increment(years, decade(track.year));
-    }
+      for (const track of tracks) {
+        increment(genres, track.genre || "Unknown");
+        increment(artists, track.artist || "Unknown");
+        increment(years, decade(track.year));
+      }
 
-    return {
-      name: playlist.name,
-      id: playlist.id,
-      reportedTrackCount: playlist.trackCount,
-      fetchedTrackCount: tracks.length,
-      durationHours: Math.round(tracks.reduce((sum, track) => sum + (track.duration || 0), 0) / 360) / 10,
-      topGenres: top(genres, topLimit),
-      topArtists: top(artists, topLimit),
-      decades: top(years, topLimit),
-      error,
-    };
-  }).sort((a, b) => b.fetchedTrackCount - a.fetchedTrackCount || a.name.localeCompare(b.name));
+      return {
+        name: playlist.name,
+        id: playlist.id,
+        reportedTrackCount: playlist.trackCount,
+        fetchedTrackCount: tracks.length,
+        durationHours: Math.round(tracks.reduce((sum, track) => sum + (track.duration || 0), 0) / 360) / 10,
+        topGenres: top(genres, topLimit),
+        topArtists: top(artists, topLimit),
+        decades: top(years, topLimit),
+        error,
+      };
+    })
+    .sort((a, b) => b.fetchedTrackCount - a.fetchedTrackCount || a.name.localeCompare(b.name));
 }
 
 function findOrphanTracks(tracks: Track[], playlistTracks: PlaylistTrackSnapshot[]): Track[] {
@@ -173,10 +174,11 @@ function findOrphanTracks(tracks: Track[], playlistTracks: PlaylistTrackSnapshot
     }
   }
 
-  return tracks.filter((track) =>
-    !(track.libraryId && libraryIds.has(track.libraryId))
-    && !(track.catalogId && catalogIds.has(track.catalogId))
-    && !keys.has(trackKey(track))
+  return tracks.filter(
+    (track) =>
+      !(track.libraryId && libraryIds.has(track.libraryId)) &&
+      !(track.catalogId && catalogIds.has(track.catalogId)) &&
+      !keys.has(trackKey(track)),
   );
 }
 
@@ -195,7 +197,7 @@ function findDuplicateCandidates(tracks: Track[]): DuplicateCandidate[] {
     .map(([key, items]) => ({
       key,
       count: items.length,
-      tracks: items.map(summarizeTrack),
+      tracks: items,
     }))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
 }
@@ -213,7 +215,7 @@ function findExactCatalogDuplicates(tracks: Track[]): ExactCatalogDuplicate[] {
     .map(([catalogId, items]) => ({
       catalogId,
       count: items.length,
-      tracks: items.map(summarizeTrack),
+      tracks: items,
     }))
     .sort((a, b) => b.count - a.count || a.catalogId.localeCompare(b.catalogId));
 }
@@ -237,29 +239,30 @@ function buildThemeSuggestions(
       increment(decadeCounts, decade(track.year));
     }
 
-    const topGenres = new Set(top(genreCounts, 8).map(item => item.name));
-    const topArtists = new Set(top(artistCounts, 12).map(item => item.name));
-    const topDecades = new Set(top(decadeCounts, 4).map(item => item.name));
+    const topGenres = new Set(top(genreCounts, 8).map((item) => item.name));
+    const topArtists = new Set(top(artistCounts, 12).map((item) => item.name));
+    const topDecades = new Set(top(decadeCounts, 4).map((item) => item.name));
 
-    const candidates = orphanTracks.map((track) => {
-      const reasons: string[] = [];
-      let score = 0;
-      if (track.genre && topGenres.has(track.genre)) {
-        score += 5;
-        reasons.push(`genre:${track.genre}`);
-      }
-      if (topArtists.has(track.artist)) {
-        score += 4;
-        reasons.push(`artist:${track.artist}`);
-      }
-      const trackDecade = decade(track.year);
-      if (trackDecade !== "Unknown" && topDecades.has(trackDecade)) {
-        score += 1;
-        reasons.push(`decade:${trackDecade}`);
-      }
-      return { track, score, reasons };
-    })
-      .filter(candidate => candidate.score >= 5)
+    const candidates = orphanTracks
+      .map((track) => {
+        const reasons: string[] = [];
+        let score = 0;
+        if (track.genre && topGenres.has(track.genre)) {
+          score += 5;
+          reasons.push(`genre:${track.genre}`);
+        }
+        if (topArtists.has(track.artist)) {
+          score += 4;
+          reasons.push(`artist:${track.artist}`);
+        }
+        const trackDecade = decade(track.year);
+        if (trackDecade !== "Unknown" && topDecades.has(trackDecade)) {
+          score += 1;
+          reasons.push(`decade:${trackDecade}`);
+        }
+        return { track, score, reasons };
+      })
+      .filter((candidate) => candidate.score >= 5)
       .sort((a, b) => b.score - a.score || a.track.name.localeCompare(b.track.name))
       .slice(0, suggestionsPerTheme);
 
@@ -272,7 +275,9 @@ function buildThemeSuggestions(
     }
   }
 
-  return suggestions.sort((a, b) => b.candidates.length - a.candidates.length || a.playlistName.localeCompare(b.playlistName));
+  return suggestions.sort(
+    (a, b) => b.candidates.length - a.candidates.length || a.playlistName.localeCompare(b.playlistName),
+  );
 }
 
 export function analyzeLibrarySnapshot(snapshot: LibrarySnapshot, options: AnalyzeOptions = {}): LibraryAudit {
@@ -322,9 +327,12 @@ export function analyzeLibrarySnapshot(snapshot: LibrarySnapshot, options: Analy
     largestAlbums: top(albumCounts, topLimit),
     playlists: {
       largest: playlistSummaries.slice(0, topLimit),
-      smallest: playlistSummaries.slice().sort((a, b) => a.fetchedTrackCount - b.fetchedTrackCount || a.name.localeCompare(b.name)).slice(0, topLimit),
-      empty: playlistSummaries.filter(playlist => playlist.fetchedTrackCount === 0),
-      errors: playlistSummaries.filter(playlist => playlist.error),
+      smallest: playlistSummaries
+        .slice()
+        .sort((a, b) => a.fetchedTrackCount - b.fetchedTrackCount || a.name.localeCompare(b.name))
+        .slice(0, topLimit),
+      empty: playlistSummaries.filter((playlist) => playlist.fetchedTrackCount === 0),
+      errors: playlistSummaries.filter((playlist) => playlist.error),
     },
     duplicateCandidates,
     exactCatalogDuplicates,
@@ -333,7 +341,10 @@ export function analyzeLibrarySnapshot(snapshot: LibrarySnapshot, options: Analy
   };
 }
 
-async function pageAll<T>(fetchPage: (limit: number, offset: number) => Promise<T[]>, options: Required<SnapshotOptions>): Promise<T[]> {
+async function pageAll<T>(
+  fetchPage: (limit: number, offset: number) => Promise<T[]>,
+  options: Required<SnapshotOptions>,
+): Promise<T[]> {
   const out: T[] = [];
   for (let offset = 0; offset < options.maxItems; offset += options.pageSize) {
     const page = await fetchPage(options.pageSize, offset);
@@ -343,15 +354,22 @@ async function pageAll<T>(fetchPage: (limit: number, offset: number) => Promise<
   return out.slice(0, options.maxItems);
 }
 
-export async function collectLibrarySnapshot(engine: MusicEngine, options: SnapshotOptions = {}): Promise<LibrarySnapshot> {
+export async function collectLibrarySnapshot(
+  engine: MusicEngine,
+  options: SnapshotOptions = {},
+): Promise<LibrarySnapshot> {
   const resolved = {
     pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
     maxItems: options.maxItems ?? DEFAULT_MAX_ITEMS,
   };
 
+  // Albums are fetched in a single call rather than paged: the native engine
+  // rebuilds the full album set from every library track on each call, so paging
+  // it would re-scan the whole library once per page. One call with maxItems
+  // returns everything for both engines.
   const [tracks, albums, playlists] = await Promise.all([
     pageAll((limit, offset) => engine.getLibraryTracks(limit, offset), resolved),
-    pageAll((limit, offset) => engine.getLibraryAlbums(limit, offset), resolved),
+    engine.getLibraryAlbums(resolved.maxItems, 0),
     engine.getPlaylists(),
   ]);
 

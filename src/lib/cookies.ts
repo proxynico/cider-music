@@ -49,8 +49,11 @@ async function importSafariCookie(): Promise<string> {
   for (const dbPath of cookieDbPaths) {
     const expanded = dbPath.replace("~", process.env.HOME || "");
     const result = await withTimeout(
-      $`sqlite3 ${expanded} "SELECT value FROM cookies WHERE name='media-user-token' AND domain LIKE '%apple.com%' LIMIT 1;"`.quiet().nothrow(),
-      COOKIE_EXTRACT_TIMEOUT_MS, "Safari cookie extraction",
+      $`sqlite3 ${expanded} "SELECT value FROM cookies WHERE name='media-user-token' AND domain LIKE '%apple.com%' LIMIT 1;"`
+        .quiet()
+        .nothrow(),
+      COOKIE_EXTRACT_TIMEOUT_MS,
+      "Safari cookie extraction",
     );
     if (result.exitCode !== 0) {
       const stderr = result.stderr.toString().trim();
@@ -68,7 +71,7 @@ async function importSafariCookie(): Promise<string> {
   throw new ExternalServiceError(
     "Could not extract media-user-token from Safari.",
     [
-      ...errors.map(e => `  - ${e}`),
+      ...errors.map((e) => `  - ${e}`),
       "",
       "Make sure you're logged into music.apple.com in Safari.",
       "You may need to grant Full Disk Access to Terminal in System Settings > Privacy.",
@@ -139,7 +142,8 @@ else:
 
   const result = await withTimeout(
     $`python3 -c ${script}`.quiet().nothrow(),
-    COOKIE_EXTRACT_TIMEOUT_MS, `${browser} cookie decryption`,
+    COOKIE_EXTRACT_TIMEOUT_MS,
+    `${browser} cookie decryption`,
   );
   const token = result.stdout.toString().trim();
   if (token && result.exitCode === 0) {
@@ -148,9 +152,10 @@ else:
   }
 
   const stderr = result.stderr.toString().trim();
-  const detail = result.exitCode !== 0
-    ? `Python exited ${result.exitCode}${stderr ? `: ${stderr}` : ""}`
-    : "No token found in cookie store";
+  const detail =
+    result.exitCode !== 0
+      ? `Python exited ${result.exitCode}${stderr ? `: ${stderr}` : ""}`
+      : "No token found in cookie store";
 
   throw new ExternalServiceError(
     `Could not extract media-user-token from ${browser}.`,
@@ -173,7 +178,8 @@ async function importFirefoxCookie(): Promise<string> {
 
   const findResult = await withTimeout(
     $`find ${profileDir} -name "cookies.sqlite" -maxdepth 2`.quiet().nothrow(),
-    COOKIE_EXTRACT_TIMEOUT_MS, "Firefox profile search",
+    COOKIE_EXTRACT_TIMEOUT_MS,
+    "Firefox profile search",
   );
   const dbPaths = findResult.stdout.toString().trim().split("\n").filter(Boolean);
 
@@ -183,8 +189,11 @@ async function importFirefoxCookie(): Promise<string> {
 
   for (const dbPath of dbPaths) {
     const queryResult = await withTimeout(
-      $`sqlite3 ${dbPath} "SELECT value FROM moz_cookies WHERE name='media-user-token' AND baseDomain LIKE '%apple.com%' LIMIT 1;"`.quiet().nothrow(),
-      COOKIE_EXTRACT_TIMEOUT_MS, "Firefox cookie query",
+      $`sqlite3 ${dbPath} "SELECT value FROM moz_cookies WHERE name='media-user-token' AND baseDomain LIKE '%apple.com%' LIMIT 1;"`
+        .quiet()
+        .nothrow(),
+      COOKIE_EXTRACT_TIMEOUT_MS,
+      "Firefox cookie query",
     );
     if (queryResult.exitCode !== 0) {
       errors.push(`${dbPath}: ${queryResult.stderr.toString().trim() || `exit code ${queryResult.exitCode}`}`);
@@ -201,7 +210,7 @@ async function importFirefoxCookie(): Promise<string> {
   throw new ExternalServiceError(
     "Could not extract media-user-token from Firefox.",
     [
-      ...errors.map(e => `  - ${e}`),
+      ...errors.map((e) => `  - ${e}`),
       "",
       "Make sure you're logged into music.apple.com in Firefox.",
       "",

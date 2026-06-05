@@ -46,7 +46,9 @@ describe("API response field extraction contract", () => {
 describe("API playlist ID validation", () => {
   test("rejects native playlist refs before making network requests", async () => {
     const engine = new ApiEngine();
-    await expect(engine.getPlaylistTracks("native:persistent:ABC123")).rejects.toBeInstanceOf(UnsupportedOperationError);
+    await expect(engine.getPlaylistTracks("native:persistent:ABC123")).rejects.toBeInstanceOf(
+      UnsupportedOperationError,
+    );
   });
 
   test("rejects unsafe raw playlist IDs before making network requests", async () => {
@@ -79,21 +81,25 @@ describe("API pagination", () => {
         calls.push({ path, params });
         if (path === "/me/library/songs" && params?.offset === "0") {
           return {
-            data: [{
-              id: "l.one",
-              type: "library-songs",
-              attributes: { name: "One", artistName: "A", albumName: "First", durationInMillis: 1000 },
-            }],
+            data: [
+              {
+                id: "l.one",
+                type: "library-songs",
+                attributes: { name: "One", artistName: "A", albumName: "First", durationInMillis: 1000 },
+              },
+            ],
             next: "/v1/me/library/songs?offset=1&limit=1",
           } as T;
         }
         if (path === "/me/library/songs" && params?.offset === "1") {
           return {
-            data: [{
-              id: "l.two",
-              type: "library-songs",
-              attributes: { name: "Two", artistName: "B", albumName: "Second", durationInMillis: 2000 },
-            }],
+            data: [
+              {
+                id: "l.two",
+                type: "library-songs",
+                attributes: { name: "Two", artistName: "B", albumName: "Second", durationInMillis: 2000 },
+              },
+            ],
           } as T;
         }
         throw new Error(`unexpected request: ${path}`);
@@ -102,7 +108,7 @@ describe("API pagination", () => {
 
     const tracks = await engine.getLibraryTracks(2, 0);
 
-    expect(tracks.map(t => t.libraryId)).toEqual(["l.one", "l.two"]);
+    expect(tracks.map((t) => t.libraryId)).toEqual(["l.one", "l.two"]);
     expect(calls).toEqual([
       { path: "/me/library/songs", params: { limit: "2", offset: "0" } },
       { path: "/me/library/songs", params: { offset: "1", limit: "1" } },
@@ -116,21 +122,25 @@ describe("API pagination", () => {
         calls.push(`${path}?${new URLSearchParams(params).toString()}`);
         if (path === "/me/library/playlists/l.playlist/tracks" && params?.limit === "100" && !params?.offset) {
           return {
-            data: [{
-              id: "l.one",
-              type: "library-songs",
-              attributes: { name: "One", artistName: "A", albumName: "First", durationInMillis: 1000 },
-            }],
+            data: [
+              {
+                id: "l.one",
+                type: "library-songs",
+                attributes: { name: "One", artistName: "A", albumName: "First", durationInMillis: 1000 },
+              },
+            ],
             next: "https://amp-api.music.apple.com/v1/me/library/playlists/l.playlist/tracks?offset=100&limit=100",
           } as T;
         }
         if (path === "/me/library/playlists/l.playlist/tracks" && params?.offset === "100") {
           return {
-            data: [{
-              id: "l.two",
-              type: "library-songs",
-              attributes: { name: "Two", artistName: "B", albumName: "Second", durationInMillis: 2000 },
-            }],
+            data: [
+              {
+                id: "l.two",
+                type: "library-songs",
+                attributes: { name: "Two", artistName: "B", albumName: "Second", durationInMillis: 2000 },
+              },
+            ],
           } as T;
         }
         throw new Error(`unexpected request: ${path}`);
@@ -139,7 +149,7 @@ describe("API pagination", () => {
 
     const tracks = await engine.getPlaylistTracks("api:library:l.playlist");
 
-    expect(tracks.map(t => t.libraryId)).toEqual(["l.one", "l.two"]);
+    expect(tracks.map((t) => t.libraryId)).toEqual(["l.one", "l.two"]);
     expect(calls).toEqual([
       "/me/library/playlists/l.playlist/tracks?limit=100",
       "/me/library/playlists/l.playlist/tracks?offset=100&limit=100",

@@ -4,7 +4,7 @@ describe("CLI contracts", () => {
   test("rejects conflicting output modes before command execution", async () => {
     const proc = Bun.spawn({
       cmd: ["bun", "run", "src/index.ts", "--json", "--plain", "status"],
-      cwd: import.meta.dir + "/..",
+      cwd: `${import.meta.dir}/..`,
       stdout: "pipe",
       stderr: "pipe",
     });

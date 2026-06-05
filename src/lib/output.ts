@@ -1,5 +1,15 @@
 import type { LibraryAudit } from "./library-audit";
-import type { OutputMode, Track, Album, Artist, Playlist, PlaylistDetails, PlaybackState, Device, SearchResults } from "./types";
+import type {
+  OutputMode,
+  Track,
+  Album,
+  Artist,
+  Playlist,
+  PlaylistDetails,
+  PlaybackState,
+  Device,
+  SearchResults,
+} from "./types";
 import { isCiderError, ValidationError } from "./errors";
 
 const RESET = "\x1b[0m";
@@ -13,9 +23,14 @@ const RED = "\x1b[31m";
 const MAGENTA = "\x1b[35m";
 
 let colorEnabled = true;
+let verboseEnabled = false;
 
 export function setColorEnabled(enabled: boolean) {
   colorEnabled = enabled;
+}
+
+export function setVerboseEnabled(enabled: boolean) {
+  verboseEnabled = enabled;
 }
 
 function c(code: string, text: string): string {
@@ -46,11 +61,15 @@ export function outputJson(data: unknown) {
 // ── Plain output (tab-separated, scriptable) ──
 
 export function outputPlainTrack(t: Track) {
-  console.log(`track\t${tsv(t.id)}\t${tsv(t.name)}\t${tsv(t.artist)}\t${tsv(t.album)}\t${formatDuration(t.duration)}\t${tsv(t.source)}`);
+  console.log(
+    `track\t${tsv(t.id)}\t${tsv(t.name)}\t${tsv(t.artist)}\t${tsv(t.album)}\t${formatDuration(t.duration)}\t${tsv(t.source)}`,
+  );
 }
 
 export function outputPlainAlbum(a: Album) {
-  console.log(`album\t${tsv(a.id)}\t${tsv(a.name)}\t${tsv(a.artist)}\t${a.trackCount}\t${a.year ?? ""}\t${tsv(a.source)}`);
+  console.log(
+    `album\t${tsv(a.id)}\t${tsv(a.name)}\t${tsv(a.artist)}\t${a.trackCount}\t${a.year ?? ""}\t${tsv(a.source)}`,
+  );
 }
 
 export function outputPlainArtist(a: Artist) {
@@ -66,31 +85,37 @@ export function outputPlainStatus(s: PlaybackState) {
     console.log(`stopped\t0\t0\t${s.volume}`);
     return;
   }
-  console.log(`${tsv(s.state)}\t${tsv(s.track.name)}\t${tsv(s.track.artist)}\t${formatDuration(s.position)}/${formatDuration(s.track.duration)}\t${s.volume}`);
+  console.log(
+    `${tsv(s.state)}\t${tsv(s.track.name)}\t${tsv(s.track.artist)}\t${formatDuration(s.position)}/${formatDuration(s.track.duration)}\t${s.volume}`,
+  );
 }
 
 // ── Human output (colorized) ──
 
 export function outputHumanTrack(t: Track, index?: number) {
-  const prefix = index !== undefined ? c(DIM, `${(index + 1).toString().padStart(3)}.`) + " " : "";
+  const prefix = index !== undefined ? `${c(DIM, `${(index + 1).toString().padStart(3)}.`)} ` : "";
   const duration = c(DIM, formatDuration(t.duration));
-  console.log(`${prefix}${c(BOLD + WHITE, t.name)} ${c(DIM, "--")} ${c(CYAN, t.artist)} ${c(DIM, "/")} ${c(DIM, t.album)} ${duration}`);
+  console.log(
+    `${prefix}${c(BOLD + WHITE, t.name)} ${c(DIM, "--")} ${c(CYAN, t.artist)} ${c(DIM, "/")} ${c(DIM, t.album)} ${duration}`,
+  );
 }
 
 export function outputHumanAlbum(a: Album, index?: number) {
-  const prefix = index !== undefined ? c(DIM, `${(index + 1).toString().padStart(3)}.`) + " " : "";
+  const prefix = index !== undefined ? `${c(DIM, `${(index + 1).toString().padStart(3)}.`)} ` : "";
   const year = a.year ? c(DIM, `(${a.year})`) : "";
-  console.log(`${prefix}${c(BOLD + WHITE, a.name)} ${c(DIM, "--")} ${c(CYAN, a.artist)} ${year} ${c(DIM, `${a.trackCount} tracks`)}`);
+  console.log(
+    `${prefix}${c(BOLD + WHITE, a.name)} ${c(DIM, "--")} ${c(CYAN, a.artist)} ${year} ${c(DIM, `${a.trackCount} tracks`)}`,
+  );
 }
 
 export function outputHumanArtist(a: Artist, index?: number) {
-  const prefix = index !== undefined ? c(DIM, `${(index + 1).toString().padStart(3)}.`) + " " : "";
+  const prefix = index !== undefined ? `${c(DIM, `${(index + 1).toString().padStart(3)}.`)} ` : "";
   const genre = a.genre ? c(DIM, `(${a.genre})`) : "";
   console.log(`${prefix}${c(BOLD + WHITE, a.name)} ${genre}`);
 }
 
 export function outputHumanPlaylist(p: Playlist, index?: number) {
-  const prefix = index !== undefined ? c(DIM, `${(index + 1).toString().padStart(3)}.`) + " " : "";
+  const prefix = index !== undefined ? `${c(DIM, `${(index + 1).toString().padStart(3)}.`)} ` : "";
   console.log(`${prefix}${c(BOLD + WHITE, p.name)} ${c(DIM, `${p.trackCount} tracks`)}`);
 }
 
@@ -113,7 +138,7 @@ export function outputHumanStatus(s: PlaybackState) {
 }
 
 export function outputHumanDevice(d: Device, index?: number) {
-  const prefix = index !== undefined ? c(DIM, `${(index + 1).toString().padStart(3)}.`) + " " : "";
+  const prefix = index !== undefined ? `${c(DIM, `${(index + 1).toString().padStart(3)}.`)} ` : "";
   const active = d.active ? c(GREEN, " (active)") : "";
   console.log(`${prefix}${c(BOLD + WHITE, d.name)} ${c(DIM, d.kind)}${active}`);
 }
@@ -134,7 +159,7 @@ export function outputTracks(tracks: Track[], mode: OutputMode) {
   if (mode === "plain") return tracks.forEach(outputPlainTrack);
   if (tracks.length === 0) return console.log(c(DIM, "No tracks found"));
   console.log(c(DIM, `${tracks.length} track${tracks.length === 1 ? "" : "s"}`));
-  tracks.forEach((t, i) => outputHumanTrack(t, i));
+  for (const [i, t] of tracks.entries()) outputHumanTrack(t, i);
 }
 
 export function outputAlbums(albums: Album[], mode: OutputMode) {
@@ -142,7 +167,7 @@ export function outputAlbums(albums: Album[], mode: OutputMode) {
   if (mode === "plain") return albums.forEach(outputPlainAlbum);
   if (albums.length === 0) return console.log(c(DIM, "No albums found"));
   console.log(c(DIM, `${albums.length} album${albums.length === 1 ? "" : "s"}`));
-  albums.forEach((a, i) => outputHumanAlbum(a, i));
+  for (const [i, a] of albums.entries()) outputHumanAlbum(a, i);
 }
 
 export function outputArtists(artists: Artist[], mode: OutputMode) {
@@ -150,7 +175,7 @@ export function outputArtists(artists: Artist[], mode: OutputMode) {
   if (mode === "plain") return artists.forEach(outputPlainArtist);
   if (artists.length === 0) return console.log(c(DIM, "No artists found"));
   console.log(c(DIM, `${artists.length} artist${artists.length === 1 ? "" : "s"}`));
-  artists.forEach((a, i) => outputHumanArtist(a, i));
+  for (const [i, a] of artists.entries()) outputHumanArtist(a, i);
 }
 
 export function outputPlaylists(playlists: Playlist[], mode: OutputMode) {
@@ -158,7 +183,7 @@ export function outputPlaylists(playlists: Playlist[], mode: OutputMode) {
   if (mode === "plain") return playlists.forEach(outputPlainPlaylist);
   if (playlists.length === 0) return console.log(c(DIM, "No playlists found"));
   console.log(c(DIM, `${playlists.length} playlist${playlists.length === 1 ? "" : "s"}`));
-  playlists.forEach((p, i) => outputHumanPlaylist(p, i));
+  for (const [i, p] of playlists.entries()) outputHumanPlaylist(p, i);
 }
 
 export function outputStatus(status: PlaybackState, mode: OutputMode) {
@@ -169,18 +194,22 @@ export function outputStatus(status: PlaybackState, mode: OutputMode) {
 
 export function outputDevices(devices: Device[], mode: OutputMode) {
   if (mode === "json") return outputJson(devices);
-  if (mode === "plain") return devices.forEach(d => console.log(`device\t${tsv(d.id)}\t${tsv(d.name)}\t${tsv(d.kind)}\t${d.active}`));
+  if (mode === "plain") {
+    for (const d of devices) console.log(`device\t${tsv(d.id)}\t${tsv(d.name)}\t${tsv(d.kind)}\t${d.active}`);
+    return;
+  }
   if (devices.length === 0) return console.log(c(DIM, "No devices found"));
-  devices.forEach((d, i) => outputHumanDevice(d, i));
+  for (const [i, d] of devices.entries()) outputHumanDevice(d, i);
 }
 
 export function outputSearchResults(results: SearchResults, mode: OutputMode) {
   if (mode === "json") return outputJson(results);
 
-  const hasResults = results.tracks.length > 0
-    || results.albums.length > 0
-    || results.artists.length > 0
-    || results.playlists.length > 0;
+  const hasResults =
+    results.tracks.length > 0 ||
+    results.albums.length > 0 ||
+    results.artists.length > 0 ||
+    results.playlists.length > 0;
 
   if (!hasResults) {
     if (mode === "human") console.log(c(DIM, "No results found"));
@@ -209,11 +238,13 @@ export function outputPlaylistDetails(details: PlaylistDetails, mode: OutputMode
   if (mode === "json") return outputJson(details);
 
   if (mode === "plain") {
-    console.log(`playlist\t${tsv(details.id)}\t${tsv(details.name)}\t${details.trackCount}\t${details.totalDuration}\t${tsv(details.description)}`);
+    console.log(
+      `playlist\t${tsv(details.id)}\t${tsv(details.name)}\t${details.trackCount}\t${details.totalDuration}\t${tsv(details.description)}`,
+    );
     if (details.artworkPath) console.log(`artwork\t${tsv(details.artworkPath)}`);
     if (details.artworkUrl) console.log(`artwork_url\t${tsv(details.artworkUrl)}`);
-    details.topArtists.forEach(a => console.log(`artist\t${tsv(a.name)}\t${a.count}`));
-    details.genres.forEach(g => console.log(`genre\t${tsv(g.name)}\t${g.count}`));
+    for (const a of details.topArtists) console.log(`artist\t${tsv(a.name)}\t${a.count}`);
+    for (const g of details.genres) console.log(`genre\t${tsv(g.name)}\t${g.count}`);
     return;
   }
 
@@ -277,11 +308,13 @@ export function outputLibraryAudit(audit: LibraryAudit, mode: OutputMode) {
 
   if (audit.topGenres.length > 0) {
     console.log(c(BOLD + CYAN, "\nTop Genres"));
-    audit.topGenres.slice(0, 10).forEach(item => console.log(`  ${item.name}: ${item.count}`));
+    for (const item of audit.topGenres.slice(0, 10)) console.log(`  ${item.name}: ${item.count}`);
   }
   if (audit.playlists.largest.length > 0) {
     console.log(c(BOLD + CYAN, "\nLargest Playlists"));
-    audit.playlists.largest.slice(0, 10).forEach(item => console.log(`  ${item.name}: ${item.fetchedTrackCount} tracks, ${item.durationHours}h`));
+    for (const item of audit.playlists.largest.slice(0, 10)) {
+      console.log(`  ${item.name}: ${item.fetchedTrackCount} tracks, ${item.durationHours}h`);
+    }
   }
 }
 
@@ -294,8 +327,10 @@ export function outputLibraryDuplicates(audit: LibraryAudit, mode: OutputMode, l
   };
   if (mode === "json") return outputJson(payload);
   if (mode === "plain") {
-    payload.duplicateCandidates.forEach(item => console.log(`duplicate\t${tsv(item.key)}\t${item.count}`));
-    payload.exactCatalogDuplicates.forEach(item => console.log(`exact_catalog_duplicate\t${tsv(item.catalogId)}\t${item.count}`));
+    for (const item of payload.duplicateCandidates) console.log(`duplicate\t${tsv(item.key)}\t${item.count}`);
+    for (const item of payload.exactCatalogDuplicates) {
+      console.log(`exact_catalog_duplicate\t${tsv(item.catalogId)}\t${item.count}`);
+    }
     return;
   }
 
@@ -304,13 +339,13 @@ export function outputLibraryDuplicates(audit: LibraryAudit, mode: OutputMode, l
     console.log(c(DIM, "No duplicate candidates found"));
     return;
   }
-  payload.duplicateCandidates.forEach(item => {
+  for (const item of payload.duplicateCandidates) {
     console.log(`${c(CYAN, item.key)} ${c(DIM, `${item.count} tracks`)}`);
-    item.tracks.slice(0, 5).forEach(track => console.log(`  ${track.name} ${c(DIM, "--")} ${track.album}`));
-  });
+    for (const track of item.tracks.slice(0, 5)) console.log(`  ${track.name} ${c(DIM, "--")} ${track.album}`);
+  }
   if (payload.exactCatalogDuplicates.length > 0) {
     console.log(c(BOLD + CYAN, "\nExact Catalog Duplicates"));
-    payload.exactCatalogDuplicates.forEach(item => console.log(`  ${item.catalogId}: ${item.count}`));
+    for (const item of payload.exactCatalogDuplicates) console.log(`  ${item.catalogId}: ${item.count}`);
   }
 }
 
@@ -324,20 +359,24 @@ export function outputLibraryOrphans(audit: LibraryAudit, mode: OutputMode, limi
     console.log(c(DIM, "No orphan tracks found"));
     return;
   }
-  tracks.forEach((track, index) => outputHumanTrack(track, index));
+  for (const [index, track] of tracks.entries()) outputHumanTrack(track, index);
 }
 
 export function outputLibraryThemes(audit: LibraryAudit, mode: OutputMode, limit: number) {
-  const suggestions = audit.themeSuggestions.map(theme => ({
-    ...theme,
-    candidates: theme.candidates.slice(0, limit),
-  })).filter(theme => theme.candidates.length > 0);
+  const suggestions = audit.themeSuggestions
+    .map((theme) => ({
+      ...theme,
+      candidates: theme.candidates.slice(0, limit),
+    }))
+    .filter((theme) => theme.candidates.length > 0);
 
   if (mode === "json") return outputJson({ count: suggestions.length, suggestions });
   if (mode === "plain") {
-    suggestions.forEach(theme => {
-      theme.candidates.forEach(candidate => {
-        console.log(`theme_candidate\t${tsv(theme.playlistName)}\t${candidate.score}\t${tsv(candidate.track.id)}\t${tsv(candidate.track.name)}\t${tsv(candidate.track.artist)}\t${tsv(candidate.reasons.join(","))}`);
+    suggestions.forEach((theme) => {
+      theme.candidates.forEach((candidate) => {
+        console.log(
+          `theme_candidate\t${tsv(theme.playlistName)}\t${candidate.score}\t${tsv(candidate.track.id)}\t${tsv(candidate.track.name)}\t${tsv(candidate.track.artist)}\t${tsv(candidate.reasons.join(","))}`,
+        );
       });
     });
     return;
@@ -348,16 +387,18 @@ export function outputLibraryThemes(audit: LibraryAudit, mode: OutputMode, limit
     console.log(c(DIM, "No theme suggestions found"));
     return;
   }
-  suggestions.forEach(theme => {
+  suggestions.forEach((theme) => {
     console.log(c(BOLD + CYAN, `\n${theme.playlistName}`));
-    theme.candidates.forEach(candidate => {
-      console.log(`  ${candidate.track.name} ${c(DIM, "--")} ${candidate.track.artist} ${c(DIM, `(${candidate.reasons.join(", ")})`)}`);
+    theme.candidates.forEach((candidate) => {
+      console.log(
+        `  ${candidate.track.name} ${c(DIM, "--")} ${candidate.track.artist} ${c(DIM, `(${candidate.reasons.join(", ")})`)}`,
+      );
     });
   });
 }
 
 export function outputKeyValue(key: string, value: string) {
-  console.log(`${c(DIM, key + ":")} ${value}`);
+  console.log(`${c(DIM, `${key}:`)} ${value}`);
 }
 
 export function outputMessage(msg: string) {
@@ -368,17 +409,28 @@ export function outputError(msg: string) {
   console.error(c(RED, `error: ${msg}`));
 }
 
+function formatCause(cause: unknown): string {
+  if (cause instanceof Error) return cause.stack || `${cause.name}: ${cause.message}`;
+  return String(cause);
+}
+
 export function outputErrorDetails(error: unknown) {
   if (isCiderError(error)) {
     outputError(error.message);
     if (error.hint) {
       console.error(c(DIM, error.hint));
     }
+    if (verboseEnabled && error.cause !== undefined) {
+      console.error(c(DIM, `cause: ${formatCause(error.cause)}`));
+    }
     return;
   }
 
   if (error instanceof Error) {
     outputError(error.message);
+    if (verboseEnabled && error.stack) {
+      console.error(c(DIM, error.stack));
+    }
     return;
   }
 

@@ -134,8 +134,7 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
 
   const pl = program.command("playlist").alias("pl").description("Playlist management");
 
-  pl
-    .command("info <id>")
+  pl.command("info <id>")
     .description("Show playlist details: description, artwork, top artists, genres")
     .action(async (id: string) => {
       const engine = getEngine();
@@ -146,8 +145,7 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
 
   // ── Playlist editing ──
 
-  pl
-    .command("add <playlistId> <trackIds...>")
+  pl.command("add <playlistId> <trackIds...>")
     .description("Add one or more tracks to a playlist by their persistent IDs")
     .action(async (playlistId: string, trackIds: string[]) => {
       const engine = getEngine();
@@ -160,8 +158,7 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
       }
     });
 
-  pl
-    .command("remove <playlistId> <trackIds...>")
+  pl.command("remove <playlistId> <trackIds...>")
     .alias("rm")
     .description("Remove one or more tracks from a playlist by their persistent IDs")
     .action(async (playlistId: string, trackIds: string[]) => {
@@ -175,8 +172,7 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
       }
     });
 
-  pl
-    .command("tracks <id>")
+  pl.command("tracks <id>")
     .description("List tracks in a playlist (alias for library playlist)")
     .action(async (id: string) => {
       const engine = getEngine();
@@ -185,8 +181,7 @@ export function registerLibraryCommands(program: Command, getEngine: () => Music
       outputTracks(tracks, mode);
     });
 
-  pl
-    .command("list")
+  pl.command("list")
     .alias("ls")
     .description("List all playlists")
     .action(async () => {

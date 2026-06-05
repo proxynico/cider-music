@@ -1,6 +1,26 @@
 import { describe, expect, test } from "bun:test";
-import { getOutputMode, outputPlainTrack } from "../src/lib/output";
+import {
+  getOutputMode,
+  outputErrorDetails,
+  outputPlainTrack,
+  setColorEnabled,
+  setVerboseEnabled,
+} from "../src/lib/output";
+import { ExternalServiceError } from "../src/lib/errors";
 
+function captureErrors(run: () => void): string[] {
+  const lines: string[] = [];
+  const original = console.error;
+  console.error = (value?: unknown) => {
+    lines.push(String(value));
+  };
+  try {
+    run();
+  } finally {
+    console.error = original;
+  }
+  return lines;
+}
 
 describe("getOutputMode", () => {
   test("defaults to human output", () => {
@@ -45,5 +65,34 @@ describe("plain output", () => {
     expect(lines).toEqual([
       "track\tnative:persistent:ABC123\tone\\ttwo\tline\\nbreak\tcarriage\\rreturn\t1:01\tnative",
     ]);
+  });
+});
+
+describe("error output", () => {
+  test("hides the underlying cause by default", () => {
+    setColorEnabled(false);
+    setVerboseEnabled(false);
+    try {
+      const err = new ExternalServiceError("API unreachable", "Check your network.", new Error("ECONNREFUSED"));
+      const lines = captureErrors(() => outputErrorDetails(err));
+      expect(lines).toEqual(["error: API unreachable", "Check your network."]);
+    } finally {
+      setColorEnabled(true);
+    }
+  });
+
+  test("surfaces the cause when verbose is enabled", () => {
+    setColorEnabled(false);
+    setVerboseEnabled(true);
+    try {
+      const err = new ExternalServiceError("API unreachable", "Check your network.", new Error("ECONNREFUSED"));
+      const lines = captureErrors(() => outputErrorDetails(err));
+      expect(lines[0]).toBe("error: API unreachable");
+      expect(lines[1]).toBe("Check your network.");
+      expect(lines.some((line) => line.includes("ECONNREFUSED"))).toBe(true);
+    } finally {
+      setVerboseEnabled(false);
+      setColorEnabled(true);
+    }
   });
 });

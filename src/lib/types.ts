@@ -42,7 +42,7 @@ export interface Playlist extends EntityIdentity {
   trackCount: number;
   duration?: number;
   artworkPath?: string; // local file path for native engine
-  artworkUrl?: string;  // URL for API engine
+  artworkUrl?: string; // URL for API engine
 }
 
 export interface PlaylistDetails extends Playlist {

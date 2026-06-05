@@ -60,7 +60,9 @@ describe("native derived entities", () => {
 
 describe("native Music.app resolution", () => {
   test("uses the system Music.app path when it exists", () => {
-    expect(createMusicApplicationSource("/System/Applications/Music.app")).toBe('Application("/System/Applications/Music.app")');
+    expect(createMusicApplicationSource("/System/Applications/Music.app")).toBe(
+      'Application("/System/Applications/Music.app")',
+    );
   });
 
   test("falls back to the application name when the system path is missing", () => {
@@ -81,5 +83,4 @@ describe("native Music.app resolution", () => {
     expect(recovery).toContain("outside the sandbox/escalated");
     expect(recovery).toContain("Automation permission");
   });
-
 });

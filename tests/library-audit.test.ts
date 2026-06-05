@@ -31,9 +31,33 @@ describe("library audit analysis", () => {
   test("summarizes counts, duplicates, and orphan tracks", () => {
     const dialUp = playlist("dial up", "api:library:p.rock");
     const tracks = [
-      track({ name: "Everlong", artist: "Foo Fighters", album: "The Colour and the Shape", genre: "Rock", year: 1997, libraryId: "l.1", catalogId: "c.1" }),
-      track({ name: "Everlong", artist: "Foo Fighters", album: "Greatest Hits", genre: "Rock", year: 1997, libraryId: "l.2", catalogId: "c.1" }),
-      track({ name: "Nights", artist: "Frank Ocean", album: "Blonde", genre: "R&B/Soul", year: 2016, libraryId: "l.3", catalogId: "c.3" }),
+      track({
+        name: "Everlong",
+        artist: "Foo Fighters",
+        album: "The Colour and the Shape",
+        genre: "Rock",
+        year: 1997,
+        libraryId: "l.1",
+        catalogId: "c.1",
+      }),
+      track({
+        name: "Everlong",
+        artist: "Foo Fighters",
+        album: "Greatest Hits",
+        genre: "Rock",
+        year: 1997,
+        libraryId: "l.2",
+        catalogId: "c.1",
+      }),
+      track({
+        name: "Nights",
+        artist: "Frank Ocean",
+        album: "Blonde",
+        genre: "R&B/Soul",
+        year: 2016,
+        libraryId: "l.3",
+        catalogId: "c.3",
+      }),
     ];
 
     const audit = analyzeLibrarySnapshot({
@@ -48,7 +72,7 @@ describe("library audit analysis", () => {
     expect(audit.counts.duplicateNameArtistBuckets).toBe(1);
     expect(audit.counts.exactCatalogDuplicateBuckets).toBe(1);
     expect(audit.duplicateCandidates[0].key).toBe("everlong::foo fighters");
-    expect(audit.orphanTracks.map(t => t.name)).toEqual(["Nights"]);
+    expect(audit.orphanTracks.map((t) => t.name)).toEqual(["Nights"]);
   });
 
   test("suggests orphan tracks for matching playlist themes", () => {
@@ -59,22 +83,27 @@ describe("library audit analysis", () => {
       track({ name: "Blue in Green", artist: "Miles Davis", genre: "Jazz", year: 1959, libraryId: "l.3" }),
     ];
 
-    const audit = analyzeLibrarySnapshot({
-      tracks,
-      albums: [],
-      playlists: [lateNight],
-      playlistTracks: [{ playlist: lateNight, tracks: [tracks[0]] }],
-    }, { suggestionsPerTheme: 5 });
+    const audit = analyzeLibrarySnapshot(
+      {
+        tracks,
+        albums: [],
+        playlists: [lateNight],
+        playlistTracks: [{ playlist: lateNight, tracks: [tracks[0]] }],
+      },
+      { suggestionsPerTheme: 5 },
+    );
 
     expect(audit.themeSuggestions).toEqual([
       {
         playlistName: "2:47 am",
         playlistId: "api:library:p.late",
-        candidates: [{
-          track: expect.objectContaining({ name: "Best Part" }),
-          score: expect.any(Number),
-          reasons: expect.arrayContaining(["genre:R&B/Soul", "artist:Daniel Caesar", "decade:2010s"]),
-        }],
+        candidates: [
+          {
+            track: expect.objectContaining({ name: "Best Part" }),
+            score: expect.any(Number),
+            reasons: expect.arrayContaining(["genre:R&B/Soul", "artist:Daniel Caesar", "decade:2010s"]),
+          },
+        ],
       },
     ]);
   });

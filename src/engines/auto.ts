@@ -3,13 +3,10 @@ import type {
   MusicEngine,
   Track,
   Album,
-  Artist,
   Playlist,
   PlaylistDetails,
-  PlaybackState,
   SearchResults,
   SearchType,
-  Device,
 } from "../lib/types";
 import { NativeEngine } from "./native";
 import { ApiEngine } from "./api";
@@ -49,23 +46,57 @@ export class AutoEngine implements MusicEngine {
   }
 
   // Playback always goes through native
-  play(query?: string) { return this.native.play(query); }
-  pause() { return this.native.pause(); }
-  resume() { return this.native.resume(); }
-  next() { return this.native.next(); }
-  previous() { return this.native.previous(); }
-  seek(seconds: number) { return this.native.seek(seconds); }
-  setVolume(level: number) { return this.native.setVolume(level); }
-  getVolume() { return this.native.getVolume(); }
-  setShuffle(enabled: boolean) { return this.native.setShuffle(enabled); }
-  getShuffle() { return this.native.getShuffle(); }
-  setRepeat(mode: "off" | "one" | "all") { return this.native.setRepeat(mode); }
-  getRepeat() { return this.native.getRepeat(); }
-  getStatus() { return this.native.getStatus(); }
-  getDevices() { return this.native.getDevices(); }
-  addToQueue(trackId: string) { return this.native.addToQueue(trackId); }
-  addToPlaylist(playlistId: string, trackIds: string[]) { return this.native.addToPlaylist(playlistId, trackIds); }
-  removeFromPlaylist(playlistId: string, trackIds: string[]) { return this.native.removeFromPlaylist(playlistId, trackIds); }
+  play(query?: string) {
+    return this.native.play(query);
+  }
+  pause() {
+    return this.native.pause();
+  }
+  resume() {
+    return this.native.resume();
+  }
+  next() {
+    return this.native.next();
+  }
+  previous() {
+    return this.native.previous();
+  }
+  seek(seconds: number) {
+    return this.native.seek(seconds);
+  }
+  setVolume(level: number) {
+    return this.native.setVolume(level);
+  }
+  getVolume() {
+    return this.native.getVolume();
+  }
+  setShuffle(enabled: boolean) {
+    return this.native.setShuffle(enabled);
+  }
+  getShuffle() {
+    return this.native.getShuffle();
+  }
+  setRepeat(mode: "off" | "one" | "all") {
+    return this.native.setRepeat(mode);
+  }
+  getRepeat() {
+    return this.native.getRepeat();
+  }
+  getStatus() {
+    return this.native.getStatus();
+  }
+  getDevices() {
+    return this.native.getDevices();
+  }
+  addToQueue(trackId: string) {
+    return this.native.addToQueue(trackId);
+  }
+  addToPlaylist(playlistId: string, trackIds: string[]) {
+    return this.native.addToPlaylist(playlistId, trackIds);
+  }
+  removeFromPlaylist(playlistId: string, trackIds: string[]) {
+    return this.native.removeFromPlaylist(playlistId, trackIds);
+  }
 
   // Search: use API for catalog search when authenticated, otherwise use native library search.
   async search(query: string, types: SearchType[], limit?: number): Promise<SearchResults> {

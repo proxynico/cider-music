@@ -1,5 +1,5 @@
 import { $ } from "bun";
-import { existsSync } from "fs";
+import { existsSync } from "node:fs";
 import type {
   EngineCapabilities,
   MusicEngine,
@@ -13,7 +13,7 @@ import type {
   SearchType,
   Device,
 } from "../lib/types";
-import { buildIdentity, createEntityRef, parseEntityRef, validateRawId } from "../lib/entities";
+import { buildIdentity, parseEntityRef, validateRawId } from "../lib/entities";
 import { ExternalServiceError, UnsupportedOperationError } from "../lib/errors";
 import type { DeviceKind } from "../lib/types";
 
@@ -33,17 +33,17 @@ function resolveMusicApplicationReferences(script: string): string {
 }
 
 export function shouldRetryAfterMusicError(error: string): boolean {
-  return error.includes("not running")
-    || error.includes("-1728")
-    || error.includes("-1701")
-    || error.includes("-10827")
-    || error.includes("Parameter is missing");
+  return (
+    error.includes("not running") ||
+    error.includes("-1728") ||
+    error.includes("-1701") ||
+    error.includes("-10827") ||
+    error.includes("Parameter is missing")
+  );
 }
 
 function isMusicScriptingUnavailableError(error: string): boolean {
-  return error.includes("-1701")
-    || error.includes("-10827")
-    || error.includes("Parameter is missing");
+  return error.includes("-1701") || error.includes("-10827") || error.includes("Parameter is missing");
 }
 
 export function musicScriptingUnavailableRecovery(): string {
@@ -146,6 +146,20 @@ interface NativeTrackData {
   genre?: string;
   year?: number;
 }
+
+// Shared JXA expression that extracts raw track fields from a Music.app track
+// reference named `t`. Every native track read returns this shape and is mapped
+// to a Track through `parseTrack`, so IDs are constructed in exactly one place.
+const JXA_TRACK_FIELDS = `{
+  id: t.persistentID(),
+  name: t.name(),
+  artist: t.artist(),
+  album: t.album(),
+  duration: t.duration(),
+  trackNumber: t.trackNumber(),
+  genre: t.genre() || undefined,
+  year: t.year() || undefined,
+}`;
 
 const NATIVE_CAPABILITIES: EngineCapabilities = {
   playback: true,
@@ -289,7 +303,14 @@ export class NativeEngine implements MusicEngine {
   }
 
   async getStatus(): Promise<PlaybackState> {
-    return jxaJson<PlaybackState>(`
+    const raw = await jxaJson<{
+      state: PlaybackState["state"];
+      track: NativeTrackData | null;
+      position: number;
+      volume: number;
+      shuffleEnabled: boolean;
+      repeatMode: string;
+    }>(`
       const music = Application("Music");
       const state = music.playerState();
       const stateMap = { "playing": "playing", "paused": "paused", "stopped": "stopped", "fast forwarding": "playing", "rewinding": "playing" };
@@ -300,54 +321,43 @@ export class NativeEngine implements MusicEngine {
       }
 
       const t = music.currentTrack;
-      const repeatMap = { "off": "off", "one": "one", "all": "all" };
-
       return {
         state: mapped,
-        track: {
-          id: ${JSON.stringify(createEntityRef("native", "persistent", ""))} + String(t.persistentID()),
-          source: "native",
-          persistentId: String(t.persistentID()),
-          name: t.name(),
-          artist: t.artist(),
-          album: t.album(),
-          duration: t.duration(),
-          trackNumber: t.trackNumber(),
-          genre: t.genre() || undefined,
-          year: t.year() || undefined,
-        },
+        track: ${JXA_TRACK_FIELDS},
         position: music.playerPosition(),
         volume: music.soundVolume(),
         shuffleEnabled: music.shuffleEnabled(),
-        repeatMode: repeatMap[music.songRepeat()] || "off",
+        repeatMode: music.songRepeat(),
       };
     `);
+
+    return {
+      state: raw.state,
+      track: raw.track ? parseTrack(raw.track) : null,
+      position: raw.position,
+      volume: raw.volume,
+      shuffleEnabled: raw.shuffleEnabled,
+      repeatMode: raw.repeatMode === "one" || raw.repeatMode === "all" ? raw.repeatMode : "off",
+    };
   }
 
   async search(query: string, types: SearchType[], limit = 20): Promise<SearchResults> {
     const results: SearchResults = { tracks: [], albums: [], artists: [], playlists: [] };
 
-    const needsTrackSearch = types.length === 0 || types.some(type => type !== "playlist");
-    const tracks = needsTrackSearch ? await jxaJson<NativeTrackData[]>(`
+    const needsTrackSearch = types.length === 0 || types.some((type) => type !== "playlist");
+    const tracks = needsTrackSearch
+      ? await jxaJson<NativeTrackData[]>(`
         const music = Application("Music");
         const found = music.search(music.libraryPlaylists[0], { for: ${JSON.stringify(query)} });
         const limit = ${limit};
         const tracks = [];
         for (let i = 0; i < Math.min(found.length, limit); i++) {
           const t = found[i];
-          tracks.push({
-            id: t.persistentID(),
-            name: t.name(),
-            artist: t.artist(),
-            album: t.album(),
-            duration: t.duration(),
-            trackNumber: t.trackNumber(),
-            genre: t.genre() || undefined,
-            year: t.year() || undefined,
-          });
+          tracks.push(${JXA_TRACK_FIELDS});
         }
         return tracks;
-      `) : [];
+      `)
+      : [];
     const parsedTracks = tracks.map(parseTrack);
 
     if (types.includes("track") || types.length === 0) {
@@ -357,7 +367,7 @@ export class NativeEngine implements MusicEngine {
     if (types.includes("playlist")) {
       const playlists = await this.getPlaylists();
       const q = query.toLowerCase();
-      results.playlists = playlists.filter(p => p.name.toLowerCase().includes(q)).slice(0, limit);
+      results.playlists = playlists.filter((p) => p.name.toLowerCase().includes(q)).slice(0, limit);
     }
 
     // Albums and artists are derived from track search results (Music.app search only returns tracks)
@@ -381,7 +391,7 @@ export class NativeEngine implements MusicEngine {
   }
 
   async getPlaylists(): Promise<Playlist[]> {
-    return jxaJson<Playlist[]>(`
+    const raw = await jxaJson<Array<{ persistentId: string; name: string; trackCount: number }>>(`
       const music = Application("Music");
       const playlists = music.playlists();
       const result = [];
@@ -390,8 +400,6 @@ export class NativeEngine implements MusicEngine {
         // Skip internal playlists (Library, Music, etc.)
         if (kind === "none" || kind === "folder") {
           result.push({
-            id: ${JSON.stringify(createEntityRef("native", "persistent", ""))} + p.persistentID(),
-            source: "native",
             persistentId: p.persistentID(),
             name: p.name(),
             trackCount: p.tracks.length,
@@ -400,6 +408,11 @@ export class NativeEngine implements MusicEngine {
       }
       return result;
     `);
+    return raw.map((p) => ({
+      ...buildIdentity({ source: "native", persistentId: p.persistentId }),
+      name: p.name,
+      trackCount: p.trackCount,
+    }));
   }
 
   async getPlaylistInfo(playlistId: string): Promise<PlaylistDetails> {
@@ -517,16 +530,7 @@ export class NativeEngine implements MusicEngine {
       const playlists = music.playlists.whose({ persistentID: ${JSON.stringify(persistentId)} });
       if (playlists.length === 0) throw new Error("Playlist not found");
       const tracks = playlists[0].tracks();
-      return tracks.map(t => ({
-        id: t.persistentID(),
-        name: t.name(),
-        artist: t.artist(),
-        album: t.album(),
-        duration: t.duration(),
-        trackNumber: t.trackNumber(),
-        genre: t.genre() || undefined,
-        year: t.year() || undefined,
-      }));
+      return tracks.map(t => (${JXA_TRACK_FIELDS}));
     `);
     return raw.map(parseTrack);
   }
@@ -540,16 +544,7 @@ export class NativeEngine implements MusicEngine {
       const result = [];
       for (let i = start; i < end; i++) {
         const t = allTracks[i];
-        result.push({
-          id: t.persistentID(),
-          name: t.name(),
-          artist: t.artist(),
-          album: t.album(),
-          duration: t.duration(),
-          trackNumber: t.trackNumber(),
-          genre: t.genre() || undefined,
-          year: t.year() || undefined,
-        });
+        result.push(${JXA_TRACK_FIELDS});
       }
       return result;
     `);
@@ -557,7 +552,9 @@ export class NativeEngine implements MusicEngine {
   }
 
   async getLibraryAlbums(limit = 50, offset = 0): Promise<Album[]> {
-    return jxaJson<Album[]>(`
+    const raw = await jxaJson<
+      Array<{ album: string; artist: string; trackCount: number; year?: number; genre?: string }>
+    >(`
       const music = Application("Music");
       const allTracks = music.libraryPlaylists[0].tracks();
       const albumMap = {};
@@ -570,9 +567,7 @@ export class NativeEngine implements MusicEngine {
         const key = album + "::" + artist;
         if (!albumMap[key]) {
           albumMap[key] = {
-            id: "native:derived:album:" + key,
-            source: "native",
-            name: album,
+            album,
             artist,
             trackCount: 0,
             year: t.year() || undefined,
@@ -584,6 +579,14 @@ export class NativeEngine implements MusicEngine {
 
       return Object.values(albumMap).slice(${offset}, ${offset} + ${limit});
     `);
+    return raw.map((a) => ({
+      ...buildIdentity({ source: "native", derivedId: `album:${a.album}::${a.artist}` }),
+      name: a.album,
+      artist: a.artist,
+      trackCount: a.trackCount,
+      year: a.year,
+      genre: a.genre,
+    }));
   }
 
   async getDevices(): Promise<Device[]> {
@@ -597,6 +600,6 @@ export class NativeEngine implements MusicEngine {
         active: d.selected(),
       }));
     `);
-    return raw.map(d => ({ ...d, kind: normalizeDeviceKind(d.kind) }));
+    return raw.map((d) => ({ ...d, kind: normalizeDeviceKind(d.kind) }));
   }
 }

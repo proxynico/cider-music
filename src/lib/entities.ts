@@ -11,11 +11,12 @@ interface IdentityInput {
 }
 
 export function buildIdentity(input: IdentityInput): EntityIdentity {
-  const id = input.id
-    ?? (input.persistentId ? createEntityRef(input.source, "persistent", input.persistentId) : undefined)
-    ?? (input.libraryId ? createEntityRef(input.source, "library", input.libraryId) : undefined)
-    ?? (input.catalogId ? createEntityRef(input.source, "catalog", input.catalogId) : undefined)
-    ?? (input.derivedId ? createEntityRef(input.source, "derived", input.derivedId) : undefined);
+  const id =
+    input.id ??
+    (input.persistentId ? createEntityRef(input.source, "persistent", input.persistentId) : undefined) ??
+    (input.libraryId ? createEntityRef(input.source, "library", input.libraryId) : undefined) ??
+    (input.catalogId ? createEntityRef(input.source, "catalog", input.catalogId) : undefined) ??
+    (input.derivedId ? createEntityRef(input.source, "derived", input.derivedId) : undefined);
   if (!id) {
     throw new Error("Entity identity requires at least one ID");
   }

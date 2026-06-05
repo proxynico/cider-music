@@ -13,7 +13,7 @@ import {
 export function registerSearchCommands(program: Command, getEngine: () => MusicEngine) {
   const search = program
     .command("search")
-    .description("Search Apple Music");
+    .description("Search the Apple Music catalog (falls back to your local library when not authenticated)");
 
   search
     .command("track <query>")

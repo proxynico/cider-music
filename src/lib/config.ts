@@ -1,7 +1,7 @@
-import { existsSync } from "fs";
-import { mkdir, readFile, writeFile } from "fs/promises";
-import { join } from "path";
-import { homedir } from "os";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import type { CiderConfig } from "./types";
 import { ExternalServiceError, ValidationError } from "./errors";
 import { getMediaUserTokenSecret, setMediaUserTokenSecret, clearMediaUserTokenSecret } from "./secrets";
@@ -61,15 +61,13 @@ async function readConfig(path: string): Promise<CiderConfig | undefined> {
 }
 
 export async function loadConfig(): Promise<CiderConfig> {
-  return (await readConfig(CONFIG_FILE))
-    ?? (await readConfig(LEGACY_CONFIG_FILE))
-    ?? { ...DEFAULT_CONFIG };
+  return (await readConfig(CONFIG_FILE)) ?? (await readConfig(LEGACY_CONFIG_FILE)) ?? { ...DEFAULT_CONFIG };
 }
 
 export async function saveConfig(config: CiderConfig): Promise<void> {
   await getConfigDir();
   try {
-    await writeFile(CONFIG_FILE, JSON.stringify(config, null, 2) + "\n");
+    await writeFile(CONFIG_FILE, `${JSON.stringify(config, null, 2)}\n`);
   } catch (err) {
     throw new ExternalServiceError(`Failed to save config to ${CONFIG_FILE}`, undefined, err);
   }

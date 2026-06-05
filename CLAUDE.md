@@ -21,6 +21,7 @@ orphan tracks, playlist shape, and theme suggestions.
 - Runtime: Bun
 - Language: TypeScript, strict mode
 - CLI framework: Commander.js
+- Lint/format: Biome (`bun run check` runs it first)
 - Native control: Music.app JXA through `osascript`
 - API reads: `amp-api.music.apple.com`
 - Secrets: macOS Keychain through `security`
@@ -112,15 +113,17 @@ bun run src/index.ts status --json
 bun run src/index.ts search track "radiohead" --json
 bun run src/index.ts --engine api library audit --max-items 100 --json
 bun run typecheck
+bun run lint     # biome lint + format check
+bun run format   # biome lint + format, write fixes
 bun test
-bun run check
+bun run check    # biome + typecheck + test
 bun run build
 ```
 
 Current suite:
 
 ```bash
-bun test  # 56 tests across 11 files
+bun test  # 58 tests across 11 files
 ```
 
 ## macOS Notes

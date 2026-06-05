@@ -40,7 +40,7 @@ const JWT_PATTERN = /eyJhbGciOi[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/;
 
 function decodeBase64Url(value: string): string {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized.padEnd(normalized.length + (4 - normalized.length % 4) % 4, "=");
+  const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), "=");
   return atob(padded);
 }
 
@@ -94,8 +94,9 @@ async function getWebPlayerDevToken(): Promise<string> {
   // If not in the main HTML, try fetching JS assets
   // Match both absolute (https://...) and relative (/assets/...) script src paths
   const absoluteUrls = html.match(/https:\/\/[^"']+\.js/g) || [];
-  const relativeUrls = (html.match(/src="(\/[^"]+\.js)"/g) || [])
-    .map((m: string) => `https://music.apple.com${m.match(/src="([^"]+)"/)?.[1]}`);
+  const relativeUrls = (html.match(/src="(\/[^"]+\.js)"/g) || []).map(
+    (m: string) => `https://music.apple.com${m.match(/src="([^"]+)"/)?.[1]}`,
+  );
   const jsUrls = [...absoluteUrls, ...relativeUrls];
   for (const url of jsUrls.slice(0, 10)) {
     try {
@@ -108,9 +109,7 @@ async function getWebPlayerDevToken(): Promise<string> {
         cachedDevTokenExpiry = Date.now() + DEV_TOKEN_TTL_MS;
         return cachedDevToken;
       }
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   throw new ExternalServiceError(
@@ -119,10 +118,7 @@ async function getWebPlayerDevToken(): Promise<string> {
   );
 }
 
-async function apiRequest<T>(
-  path: string,
-  params?: Record<string, string>,
-): Promise<T> {
+async function apiRequest<T>(path: string, params?: Record<string, string>): Promise<T> {
   const mediaUserToken = await getMediaUserToken();
   if (!mediaUserToken) {
     throw new AuthError(
@@ -141,11 +137,11 @@ async function apiRequest<T>(
 
   const res = await fetchWithTimeout(url.toString(), "Apple Music API request", {
     headers: {
-      "Authorization": `Bearer ${devToken}`,
+      Authorization: `Bearer ${devToken}`,
       "Media-User-Token": mediaUserToken,
-      "Origin": "https://music.apple.com",
-      "Referer": "https://music.apple.com/",
-      "Accept": "application/json",
+      Origin: "https://music.apple.com",
+      Referer: "https://music.apple.com/",
+      Accept: "application/json",
     },
   });
 
@@ -160,7 +156,7 @@ async function apiRequest<T>(
   }
 
   try {
-    return await res.json() as T;
+    return (await res.json()) as T;
   } catch (err) {
     throw new ExternalServiceError("Apple Music API returned invalid JSON.", undefined, err);
   }
@@ -214,18 +210,17 @@ function strArray(val: unknown): string[] {
 }
 
 function recordOrEmpty(val: unknown): Record<string, unknown> {
-  return val && typeof val === "object" && !Array.isArray(val)
-    ? val as Record<string, unknown>
-    : {};
+  return val && typeof val === "object" && !Array.isArray(val) ? (val as Record<string, unknown>) : {};
 }
 
 function extractIds(r: AMResource): { catalogId?: string; libraryId?: string } {
   const a = recordOrEmpty(r.attributes);
   const playParams = recordOrEmpty(a.playParams);
-  const catalogId = str(playParams.catalogId)
-    || str(playParams.id)
-    || str(playParams.globalId)
-    || (r.type === "songs" || r.type === "albums" || r.type === "artists" || r.type === "playlists" ? r.id : undefined);
+  const catalogId =
+    str(playParams.catalogId) ||
+    str(playParams.id) ||
+    str(playParams.globalId) ||
+    (r.type === "songs" || r.type === "albums" || r.type === "artists" || r.type === "playlists" ? r.id : undefined);
   const libraryId = r.type.startsWith("library-") ? r.id : undefined;
   return { catalogId: catalogId || undefined, libraryId };
 }
@@ -356,7 +351,11 @@ export class ApiEngine implements MusicEngine {
     return cachedStorefront;
   }
 
-  private async requestAllData(path: string, params: Record<string, string>, maxItems = Infinity): Promise<AMResource[]> {
+  private async requestAllData(
+    path: string,
+    params: Record<string, string>,
+    maxItems = Infinity,
+  ): Promise<AMResource[]> {
     const resources: AMResource[] = [];
     let page: ApiPage | null = { path, params };
     let pageCount = 0;
@@ -383,23 +382,38 @@ export class ApiEngine implements MusicEngine {
   // Playback must go through Music.app (native engine).
 
   async play(_query?: string): Promise<void> {
-    throw new UnsupportedOperationError("Playback control requires the native engine.", "Use `cider-music --engine native play`.");
+    throw new UnsupportedOperationError(
+      "Playback control requires the native engine.",
+      "Use `cider-music --engine native play`.",
+    );
   }
 
   async pause(): Promise<void> {
-    throw new UnsupportedOperationError("Playback control requires the native engine.", "Use `cider-music --engine native pause`.");
+    throw new UnsupportedOperationError(
+      "Playback control requires the native engine.",
+      "Use `cider-music --engine native pause`.",
+    );
   }
 
   async resume(): Promise<void> {
-    throw new UnsupportedOperationError("Playback control requires the native engine.", "Use `cider-music --engine native resume`.");
+    throw new UnsupportedOperationError(
+      "Playback control requires the native engine.",
+      "Use `cider-music --engine native resume`.",
+    );
   }
 
   async next(): Promise<void> {
-    throw new UnsupportedOperationError("Playback control requires the native engine.", "Use `cider-music --engine native next`.");
+    throw new UnsupportedOperationError(
+      "Playback control requires the native engine.",
+      "Use `cider-music --engine native next`.",
+    );
   }
 
   async previous(): Promise<void> {
-    throw new UnsupportedOperationError("Playback control requires the native engine.", "Use `cider-music --engine native prev`.");
+    throw new UnsupportedOperationError(
+      "Playback control requires the native engine.",
+      "Use `cider-music --engine native prev`.",
+    );
   }
 
   async seek(_seconds: number): Promise<void> {
@@ -444,8 +458,8 @@ export class ApiEngine implements MusicEngine {
       playlist: "playlists",
     };
 
-    const amTypes = (types.length > 0 ? types : ["track", "album", "artist"] as SearchType[])
-      .map(t => typeMap[t])
+    const amTypes = (types.length > 0 ? types : (["track", "album", "artist"] as SearchType[]))
+      .map((t) => typeMap[t])
       .join(",");
 
     const storefront = await this.getStorefront();
@@ -527,32 +541,52 @@ export class ApiEngine implements MusicEngine {
       totalDuration: tracks.reduce((sum, t) => sum + t.duration, 0),
       artworkUrl: formatArtwork(a.artwork),
       tracks,
-      topArtists: Array.from(artistCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 15).map(([name, count]) => ({ name, count })),
-      genres: Array.from(genreCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, count]) => ({ name, count })),
+      topArtists: Array.from(artistCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 15)
+        .map(([name, count]) => ({ name, count })),
+      genres: Array.from(genreCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([name, count]) => ({ name, count })),
     };
   }
 
   async addToPlaylist(_playlistId: string, _trackIds: string[]): Promise<void> {
-    throw new UnsupportedOperationError("Playlist editing via API is not implemented.", "Use `--engine native` with native persistent IDs.");
+    throw new UnsupportedOperationError(
+      "Playlist editing via API is not implemented.",
+      "Use `--engine native` with native persistent IDs.",
+    );
   }
 
   async removeFromPlaylist(_playlistId: string, _trackIds: string[]): Promise<void> {
-    throw new UnsupportedOperationError("Playlist editing via API is not implemented.", "Use `--engine native` with native persistent IDs.");
+    throw new UnsupportedOperationError(
+      "Playlist editing via API is not implemented.",
+      "Use `--engine native` with native persistent IDs.",
+    );
   }
 
   async getLibraryTracks(limit = 50, offset = 0): Promise<Track[]> {
-    const data = await this.requestAllData("/me/library/songs", {
-      limit: String(limit),
-      offset: String(offset),
-    }, limit);
+    const data = await this.requestAllData(
+      "/me/library/songs",
+      {
+        limit: String(limit),
+        offset: String(offset),
+      },
+      limit,
+    );
     return data.map(parseApiTrack);
   }
 
   async getLibraryAlbums(limit = 50, offset = 0): Promise<Album[]> {
-    const data = await this.requestAllData("/me/library/albums", {
-      limit: String(limit),
-      offset: String(offset),
-    }, limit);
+    const data = await this.requestAllData(
+      "/me/library/albums",
+      {
+        limit: String(limit),
+        offset: String(offset),
+      },
+      limit,
+    );
     return data.map(parseApiAlbum);
   }
 
